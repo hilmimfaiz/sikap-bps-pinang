@@ -1,6 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary'
 
-// Konfigurasi Cloudinary
+// Konfigurasi Cloudinary dari Environment Variables
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -10,11 +10,11 @@ cloudinary.config({
 
 export const saveFile = async (file: any) => {
   return new Promise((resolve, reject) => {
-    // Gunakan upload_stream untuk mengupload buffer dari memori langsung ke Cloudinary
+    // Upload stream ke Cloudinary
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder: 'sikap_app_archives', // Nama folder di Cloudinary
-        resource_type: 'auto',        // Otomatis deteksi (image/pdf/raw)
+        folder: 'sikap_app_archives', 
+        resource_type: 'auto',
         public_id: file.filename ? file.filename.split('.')[0] + '-' + Date.now() : undefined
       },
       (error, result) => {
@@ -23,42 +23,38 @@ export const saveFile = async (file: any) => {
           return reject(createError({ statusCode: 500, message: 'Gagal upload ke Cloudinary' }))
         }
 
-        // Return format yang sesuai dengan skema database Archive
         resolve({
-          filePath: result?.secure_url || '', // URL publik dari Cloudinary
+          filePath: result?.secure_url || '',
           fileName: file.filename || 'file',
           fileType: result?.format || file.type || 'unknown',
           fileSize: result?.bytes || 0
         })
       }
     )
-
-    // Tulis buffer file ke stream upload
     uploadStream.end(file.data)
   })
 }
 
-// Fungsi bantu untuk menghapus file dari Cloudinary saat data dihapus
 export const deleteFileFromStorage = async (fileUrl: string) => {
   try {
-    if (!fileUrl.includes('cloudinary')) return // Skip jika bukan file Cloudinary
+    if (!fileUrl.includes('cloudinary')) return
 
     // Ekstrak public_id dari URL
-    // Contoh URL: https://res.cloudinary.com/demo/image/upload/v12345/sikap_app_archives/namafile.jpg
+    // URL: https://res.cloudinary.com/.../upload/v123/sikap_app_archives/namafile.jpg
+    // Public ID: sikap_app_archives/namafile
     const splitUrl = fileUrl.split('/')
     const filenameWithExt = splitUrl[splitUrl.length - 1]
-    const folderName = splitUrl[splitUrl.length - 2] // sikap_app_archives
-    const publicId = `${folderName}/${filenameWithExt.split('.')[0]}`
-
-    // Tentukan resource_type (image/video/raw)
-    // Sederhananya kita coba destroy sebagai image dulu, jika PDF biasanya dianggap 'image' atau 'raw'
-    // Untuk keakuratan penuh, idealnya simpan public_id di DB, tapi ini metode ekstraksi url:
+    const folderName = splitUrl[splitUrl.length - 2]
     
+    // Hapus ekstensi (.jpg, .pdf) untuk mendapatkan public_id murni
+    const publicId = `${folderName}/${filenameWithExt.substring(0, filenameWithExt.lastIndexOf('.'))}`
+
+    // Hapus (Coba sebagai image dan raw/pdf)
     await cloudinary.uploader.destroy(publicId, { resource_type: 'image' })
-    await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' }) // Coba raw juga (untuk PDF/Doc)
+    await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' })
+    await cloudinary.uploader.destroy(publicId, { resource_type: 'video' }) // Jaga-jaga jika terdeteksi video
     
   } catch (error) {
     console.error('Gagal hapus file di Cloudinary:', error)
-    // Jangan throw error agar proses hapus DB tetap jalan
   }
 }

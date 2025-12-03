@@ -1,11 +1,12 @@
 import { PrismaClient } from '@prisma/client'
-// Import fungsi hapus yang baru kita buat
-import { deleteFileFromStorage } from '~/server/utils/fileUpload'
+
+// HAPUS BARIS INI: import { deleteFileFromStorage } from '~/server/utils/fileUpload'
+// Fungsi deleteFileFromStorage sudah otomatis tersedia global di server routes.
 
 const prisma = new PrismaClient()
 
 export default defineEventHandler(async (event) => {
-  const id = event.context.params?.id
+  const id = getRouterParam(event, 'id')
   const userCookie = getCookie(event, 'user_data')
 
   if (!id || !userCookie) {
@@ -36,6 +37,7 @@ export default defineEventHandler(async (event) => {
 
     // 3. Hapus File Fisik di Cloudinary
     if (archive.filePath) {
+      // Panggil fungsi langsung tanpa import
       await deleteFileFromStorage(archive.filePath)
     }
 
