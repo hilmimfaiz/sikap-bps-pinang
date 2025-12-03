@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id    Int    @id @default(autoincrement())
+  name  String @unique // admin, editor, viewer
+  users User[]
+}
+
+model User {
+  id               Int      @id @default(autoincrement())
+  name             String
+  email            String   @unique
+  password         String
+  roleId           Int
+  role             Role     @relation(fields: [roleId], references: [id])
+  photoProfile     String?
+  isActive         Boolean  @default(true)
+
+  resetToken       String?  @unique
+  resetTokenExpiry DateTime?
+
+  archives         Archive[]
+  folders          Folder[]
+  
+  sharedFolders    FolderShare[]
+  sharedFiles      ArchiveShare[]
+
+  categoriesInCharge Category[] @relation("CategoryInCharge") 
+
+  notifications    Notification[]
+  sentMessages     Message[]      @relation("SentMessages")
+  receivedMessages Message[]      @relation("ReceivedMessages")
+
+  createdAt        DateTime @default(now())
+}
+
+model Category {
+  id         Int       @id @default(autoincrement())
+  name       String
+  links      Link[]
+  inChargeId Int?
+
+  inCharge   User?     @relation("CategoryInCharge", fields: [inChargeId], references: [id], onDelete: SetNull)
+}
+
+model Folder {
+  id        Int       @id @default(autoincrement())
+  name      String
+  userId    Int
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  parentId  Int?
+  parent    Folder?   @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade) // Jika parent dihapus, anak ikut terhapus
+  children  Folder[]  @relation("FolderHierarchy")
+
+
+  archives  Archive[]
+  shares    FolderShare[]
+  createdAt DateTime  @default(now())
+}
+
+model FolderShare {
+  id        Int      @id @default(autoincrement())
+  folderId  Int
+  userId    Int
+
+  folder    Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([folderId, userId])
+}
+
+model Archive {
+  id         Int      @id @default(autoincrement())
+  title      String
+  filePath   String
+  fileSize   Int
+  fileType   String
+  folderId   Int
+
+  folder     Folder   @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  uploaderId Int
+
+  uploader   User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  fileShares ArchiveShare[]
+  createdAt  DateTime @default(now())
+}
+
+model ArchiveShare {
+  id        Int      @id @default(autoincrement())
+  archiveId Int
+  userId    Int
+
+  archive   Archive  @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([archiveId, userId])
+}
+
+model Link {
+  id         Int      @id @default(autoincrement())
+  title      String
+  url        String
+  categoryId Int
+
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  isActive   Boolean  @default(true)
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  type      String   @default("info") 
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+model Message {
+  id         Int      @id @default(autoincrement())
+  content    String   @db.Text
+  senderId   Int
+  receiverId Int
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  replyToId  Int?
+  replyTo    Message?  @relation("ReplyRelation", fields: [replyToId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  replies    Message[] @relation("ReplyRelation")
+}
