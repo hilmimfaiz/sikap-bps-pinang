@@ -7,7 +7,7 @@
     "dev": "cross-env NODE_OPTIONS=--max-old-space-size=4096 nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "cloudinary": "^2.5.1",
