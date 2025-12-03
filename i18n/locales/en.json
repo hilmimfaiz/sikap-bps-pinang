@@ -25,7 +25,7 @@
     "delete_all": "Delete All"
   },
   "header": {
-    "title": "Administrator Panel",
+    "title": "User Panel",
     "subtitle": "Digital Archiving Information System",
     "logout": "Logout",
     "profile": "Profile",
