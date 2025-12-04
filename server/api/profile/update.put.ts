@@ -24,6 +24,14 @@ export default defineEventHandler(async (event) => {
     const name = getValue('name') || currentUser.name
     const email = getValue('email') || currentUser.email
 
+    // --- VALIDASI NAMA (SERVER SIDE) ---
+    // Regex: Hanya Huruf, Spasi, Titik, Koma
+    const nameRegex = /^[a-zA-Z\s.,]+$/
+    if (name && !nameRegex.test(name)) {
+      throw createError({ statusCode: 400, message: 'Nama mengandung karakter yang tidak diizinkan (Hanya huruf, titik, koma).' })
+    }
+    // ----------------------------------
+
     // 2. Siapkan Data Update
     const updateData: any = {
       name: name,

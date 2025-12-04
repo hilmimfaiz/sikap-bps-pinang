@@ -22,11 +22,11 @@ const previewPhoto = ref(userCookie.value?.photoProfile || null)
 
 // UI States
 const isVisible = ref(false)
-const showPhotoMenu = ref(false) // Menu pilihan (Lihat/Unggah)
-const showPhotoPreview = ref(false) // Modal lihat foto full
-const fileInputRef = ref<HTMLInputElement | null>(null) // Ref ke input file hidden
+const showPhotoMenu = ref(false) 
+const showPhotoPreview = ref(false) 
+const fileInputRef = ref<HTMLInputElement | null>(null) 
 
-// Click Outside handling for menu
+// Click Outside handling
 const photoMenuRef = ref<HTMLElement | null>(null)
 
 // Animation Trigger
@@ -35,7 +35,6 @@ onMounted(() => {
     isVisible.value = true
   }, 100)
   
-  // Close menu on click outside
   document.addEventListener('click', (e) => {
     if (photoMenuRef.value && !photoMenuRef.value.contains(e.target as Node)) {
       showPhotoMenu.value = false
@@ -77,6 +76,15 @@ const onFileChange = (e: any) => {
 
 // Update Profile
 const handleUpdateProfile = async () => {
+  // --- VALIDASI NAMA (NO EMOJI) ---
+  // Regex: Hanya Huruf (a-z), Spasi (\s), Titik (.), dan Koma (,)
+  const nameRegex = /^[a-zA-Z\s.,]+$/
+  if (!nameRegex.test(form.value.name)) {
+    toast.warning('Nama hanya boleh berisi huruf, titik, dan koma.')
+    return
+  }
+  // --------------------------------
+
   startLoading(t('profile.messages.process'))
   
   try {
