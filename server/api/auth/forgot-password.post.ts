@@ -1,4 +1,4 @@
-// nuxt proyek awak/server/api/auth/forgot-password.post.ts
+// server/api/auth/forgot-password.post.ts
 
 import crypto from 'crypto'
 import { createError, defineEventHandler, readBody, getHeader } from 'h3'
@@ -18,9 +18,13 @@ export default defineEventHandler(async (event) => {
     where: { email: body.email }
   })
 
-  // Demi keamanan, kembalikan pesan sukses palsu jika user tidak ditemukan
+  // [FIX] Validasi Ketat: Jika user tidak ditemukan, lempar Error
+  // Ini memastikan hanya email yang terdaftar yang bisa memproses reset
   if (!user) {
-    return { message: 'Jika email terdaftar, tautan reset kata sandi telah dikirim.' }
+    throw createError({ 
+      statusCode: 404, 
+      message: 'Email tidak terdaftar di sistem. Silakan periksa kembali email Anda.' 
+    })
   }
 
   // 2. Generate Token Unik
@@ -41,9 +45,7 @@ export default defineEventHandler(async (event) => {
      throw createError({ statusCode: 500, message: 'Gagal menyimpan token reset.' })
   }
 
-
   // 4. Construct reset URL - Logika Dinamis (Ngrok/Dynamic URL)
-  
   const protocol = getHeader(event, 'x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : 'http')
   const host = getHeader(event, 'host') 
 
@@ -60,9 +62,12 @@ export default defineEventHandler(async (event) => {
   try {
       await sendResetEmail(user.email, resetUrl) 
   } catch (error) {
-      console.error('Gagal mengirim email. Lanjutkan untuk memberikan respons aman.', error);
+      console.error('Gagal mengirim email:', error);
+      // Opsional: Anda bisa throw error di sini jika ingin user tahu email gagal terkirim,
+      // tapi biasanya kita biarkan sukses agar token tetap valid jika user mau coba resend manual/hubungi admin.
+      throw createError({ statusCode: 500, message: 'Gagal mengirim email reset password.' })
   }
   
-  // Memberikan respons sukses yang aman
-  return { message: 'Jika email terdaftar, tautan reset kata sandi telah dikirim.' }
+  // 6. Return Sukses
+  return { message: 'Tautan reset kata sandi telah dikirim ke email Anda.' }
 })
