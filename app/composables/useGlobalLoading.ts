@@ -9,7 +9,7 @@ export const useGlobalLoading = () => {
   }
 
   const stopLoading = async () => {
-    await wait(1500) // Wajib tunggu 1.5 detik
+    await wait(200)
     store.stop()
   }
 
