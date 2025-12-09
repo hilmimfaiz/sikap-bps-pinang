@@ -12,15 +12,17 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event)
 
-  if (!body.name || !body.inChargeId) {
-    throw createError({ statusCode: 400, message: 'Nama dan Penanggung Jawab wajib diisi' })
+  // [FIX] Hapus validasi body.inChargeId agar boleh null/kosong
+  if (!body.name) {
+    throw createError({ statusCode: 400, message: 'Nama kategori wajib diisi' })
   }
 
   try {
     const category = await prisma.category.create({
       data: {
         name: body.name,
-        inChargeId: parseInt(body.inChargeId)
+        // [FIX] Jika inChargeId ada (truthy), parse ke int. Jika tidak, set null.
+        inChargeId: body.inChargeId ? parseInt(String(body.inChargeId)) : null
       }
     })
     return category

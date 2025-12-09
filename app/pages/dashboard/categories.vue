@@ -58,9 +58,10 @@ const showBulkDeleteConfirm = ref(false)
 
 const selectedCategory = ref<any>(null)
 
+// [FIX] Update tipe data inChargeId agar bisa null
 const form = ref({
   name: '',
-  inChargeId: '' as string | number
+  inChargeId: null as number | null
 })
 
 // Animation Trigger
@@ -107,22 +108,27 @@ const closeModals = () => {
   showEditModal.value = false
   showDeleteConfirm.value = false
   showBulkDeleteConfirm.value = false
-  form.value = { name: '', inChargeId: '' }
+  form.value = { name: '', inChargeId: null } // Reset form
   selectedCategory.value = null
 }
 
 // Create
 const handleCreate = async () => {
   if (!isAdmin.value) return
-  if (!form.value.name.trim() || !form.value.inChargeId) {
-    return toast.warning(t('categories.messages.validation_error'))
+  
+  // [FIX] Validasi hanya untuk nama, inChargeId boleh kosong (null)
+  if (!form.value.name.trim()) {
+    return toast.warning(t('categories.messages.name_required') || 'Nama kategori wajib diisi')
   }
 
   startLoading(t('categories.messages.create_process'))
   try {
     await $fetch('/api/categories/create', {
       method: 'POST',
-      body: { name: form.value.name, inChargeId: Number(form.value.inChargeId) }
+      body: { 
+        name: form.value.name, 
+        inChargeId: form.value.inChargeId // Kirim value (bisa null)
+      }
     })
     await refresh()
     closeModals()
@@ -137,16 +143,24 @@ const handleCreate = async () => {
 // Edit
 const openEdit = (cat: any) => {
   selectedCategory.value = cat
-  form.value = { name: cat.name, inChargeId: cat.inCharge?.id || '' }
+  // [FIX] Set inChargeId ke null jika tidak ada PIC
+  form.value = { 
+    name: cat.name, 
+    inChargeId: cat.inCharge?.id || null 
+  }
   showEditModal.value = true
 }
+
 const handleUpdate = async () => {
   if (!isAdmin.value) return
   startLoading(t('categories.messages.update_process'))
   try {
     await $fetch(`/api/categories/${selectedCategory.value.id}`, {
       method: 'PUT',
-      body: { name: form.value.name, inChargeId: Number(form.value.inChargeId) }
+      body: { 
+        name: form.value.name, 
+        inChargeId: form.value.inChargeId // Kirim value (bisa null)
+      }
     })
     await refresh()
     closeModals()
@@ -329,7 +343,7 @@ const handleBulkDelete = async () => {
                   </div>
                   <span v-else class="text-xs text-gray-400 italic flex items-center gap-2">
                     <span class="w-1.5 h-1.5 bg-gray-300 rounded-full"></span>
-                    {{ $t('categories.table.pic_none') }}
+                    {{ $t('categories.table.pic_none') || 'Belum Ditentukan' }}
                   </span>
                 </td>
 
@@ -440,10 +454,9 @@ const handleBulkDelete = async () => {
                 <div class="relative">
                   <select
                     v-model="form.inChargeId"
-                    required
                     class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all appearance-none text-gray-900 dark:text-white text-sm"
                   >
-                    <option value="" disabled>{{ $t('categories.modal.pic_select') }}</option>
+                    <option :value="null">Belum Ditentukan</option>
                     <option v-for="u in users" :key="u.id" :value="u.id">
                       {{ u.name }}
                     </option>

@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
 
   if (!body.name) {
-    throw createError({ statusCode: 400, message: 'Data tidak lengkap' })
+    throw createError({ statusCode: 400, message: 'Nama kategori wajib diisi' })
   }
 
   try {
@@ -22,7 +22,8 @@ export default defineEventHandler(async (event) => {
       where: { id: parseInt(id) },
       data: { 
         name: body.name,
-        inChargeId: body.inChargeId ? parseInt(body.inChargeId) : undefined 
+        // [FIX] Handle update ke null. Jika inChargeId falsy (null/undefined/0/empty), set ke null.
+        inChargeId: body.inChargeId ? parseInt(String(body.inChargeId)) : null
       }
     })
     return category
