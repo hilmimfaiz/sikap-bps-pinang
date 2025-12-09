@@ -7,6 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Model Role (Admin, Editor, Viewer)
 model Role {
   id    Int    @id @default(autoincrement())
   name  String @unique // admin, editor, viewer
@@ -14,57 +15,64 @@ model Role {
 }
 
 model User {
-  id               Int      @id @default(autoincrement())
-  name             String
-  email            String   @unique
-  password         String
-  roleId           Int
-  role             Role     @relation(fields: [roleId], references: [id])
-  photoProfile     String?
-  isActive         Boolean  @default(true)
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  password     String
+  photoProfile String?
+  isActive     Boolean  @default(true)
 
-  resetToken       String?  @unique
-  resetTokenExpiry DateTime?
+  // ==========================================
+  // FIX: Field Khusus untuk Fitur OTP Resend
+  // ==========================================
+  otpCode      String?  // Menyimpan kode 6 digit
+  otpExpires   DateTime? // Waktu kadaluarsa kode
 
-  archives         Archive[]
-  folders          Folder[]
+  // Relasi Role
+  roleId       Int
+  role         Role     @relation(fields: [roleId], references: [id])
+
+  // Relasi ke Fitur Lain
+  archives       Archive[]
+  folders        Folder[]
   
-  sharedFolders    FolderShare[]
-  sharedFiles      ArchiveShare[]
+  sharedFolders  FolderShare[]
+  sharedFiles    ArchiveShare[]
 
   categoriesInCharge Category[] @relation("CategoryInCharge") 
 
-  notifications    Notification[]
+  notifications  Notification[]
+  
+  // Relasi Chat/Pesan
   sentMessages     Message[]      @relation("SentMessages")
   receivedMessages Message[]      @relation("ReceivedMessages")
 
-  createdAt        DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model Category {
-  id         Int       @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   name       String
   links      Link[]
   inChargeId Int?
 
-  inCharge   User?     @relation("CategoryInCharge", fields: [inChargeId], references: [id], onDelete: SetNull)
+  inCharge   User?    @relation("CategoryInCharge", fields: [inChargeId], references: [id], onDelete: SetNull)
 }
 
 model Folder {
-  id        Int       @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   name      String
   userId    Int
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   parentId  Int?
-  parent    Folder?   @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade) // Jika parent dihapus, anak ikut terhapus
-  children  Folder[]  @relation("FolderHierarchy")
-
+  parent    Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Folder[] @relation("FolderHierarchy")
 
   archives  Archive[]
   shares    FolderShare[]
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
 }
 
 model FolderShare {

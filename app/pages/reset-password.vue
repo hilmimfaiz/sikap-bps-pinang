@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 
 definePageMeta({
   layout: 'default',
-  middleware: 'auth'
+  middleware: [] // PENTING: Jangan pakai 'auth' di sini agar bisa diakses public
 })
 
 const route = useRoute()
@@ -20,7 +20,8 @@ const confirmPassword = ref('')
 const showPassword = ref(false)
 const isSubmitting = ref(false)
 
-// Ambil email dari query parameter jika ada
+// Ambil email dari query parameter jika ada (dari link di email jika Anda buat link nanti)
+// Atau dari input user di halaman sebelumnya (forgot-password)
 onMounted(() => {
   if (route.query.email) {
     email.value = route.query.email as string
@@ -28,23 +29,27 @@ onMounted(() => {
 })
 
 const handleReset = async () => {
-  // Validasi Frontend
+  // 1. Validasi Frontend Dasar
   if (!email.value || !otp.value || !password.value) {
     return toast.warning('Mohon lengkapi email, kode OTP, dan password baru')
   }
+  
+  // Validasi Kecocokan Password
   if (password.value !== confirmPassword.value) {
-    return toast.warning(t('reset.password_mismatch'))
+    return toast.warning(t('reset.password_mismatch') || 'Password konfirmasi tidak cocok')
   }
+  
+  // Validasi Panjang Password
   if (password.value.length < 6) {
-    return toast.warning(t('reset.password_min'))
+    return toast.warning(t('reset.password_min') || 'Password minimal 6 karakter')
   }
 
   isSubmitting.value = true
   startLoading('Memverifikasi OTP & Mereset...')
   
   try {
-    // Panggil API reset-password
-    await $fetch('/api/auth/reset-password', {
+    // 2. Panggil API Backend
+    const response = await $fetch('/api/auth/reset-password', {
       method: 'POST',
       body: { 
         email: email.value,
@@ -53,19 +58,24 @@ const handleReset = async () => {
       }
     })
     
+    // 3. Sukses
     await stopLoading()
     isSubmitting.value = false
-    toast.success(t('reset.success'))
+    toast.success(response.message || 'Password berhasil diubah!')
     
-    // Redirect ke Login setelah sukses
+    // Redirect ke Login setelah sukses dengan jeda sedikit
     setTimeout(() => {
       router.push('/login')
     }, 1500)
 
   } catch (e: any) {
+    // 4. Error Handling
     await stopLoading()
     isSubmitting.value = false
-    toast.error(e.data?.message || 'Gagal mereset password. Cek kembali OTP Anda.')
+    
+    // Ambil pesan error dari backend (misal: OTP expired, User not found, dll)
+    const errorMessage = e.data?.message || 'Gagal mereset password. Silakan coba lagi.'
+    toast.error(errorMessage)
   }
 }
 </script>
@@ -89,12 +99,12 @@ const handleReset = async () => {
       <NuxtLink 
         to="/login" 
         class="flex items-center gap-2 px-3 py-2 bg-white/80 backdrop-blur-xl border border-slate-200/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-500 text-xs sm:text-sm font-medium text-slate-600 hover:text-blue-600 group hover:-translate-y-0.5 hover:border-blue-300/50 dark:bg-gray-900/60 dark:border-gray-700/50 dark:text-gray-300 dark:hover:text-cyan-400 dark:hover:border-cyan-400/30"
-        :title="$t('reset.back_login')"
+        :title="$t('reset.back_login') || 'Kembali ke Login'"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
         </svg>
-        <span class="hidden sm:inline">{{ $t('reset.back_login') }}</span>
+        <span class="hidden sm:inline">{{ $t('reset.back_login') || 'Login' }}</span>
       </NuxtLink>
     </div>
 
@@ -120,7 +130,7 @@ const handleReset = async () => {
         </div>
         
         <h1 class="text-2xl font-bold bg-gradient-to-r from-slate-800 via-blue-700 to-cyan-600 bg-clip-text text-transparent tracking-tight mb-2 animate-gradient-flow dark:from-cyan-400 dark:via-blue-400 dark:to-indigo-400">
-          {{ $t('reset.title') }}
+          {{ $t('reset.title') || 'Reset Password' }}
         </h1>
         <p class="text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
           {{ $t('reset.subtitle') || 'Masukkan Kode OTP dan Kata Sandi Baru' }}
@@ -164,8 +174,8 @@ const handleReset = async () => {
               v-model="email" 
               type="email" 
               required
-              readonly
               class="w-full pl-10 pr-4 py-2.5 bg-slate-100 dark:bg-gray-800/50 border border-slate-300 dark:border-gray-700 rounded-xl focus:outline-none text-sm text-slate-500 dark:text-gray-400 cursor-not-allowed font-medium transition-all"
+              placeholder="Masukkan email Anda"
             />
           </div>
         </div>
@@ -190,7 +200,7 @@ const handleReset = async () => {
 
         <div class="group">
           <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1 ml-1 tracking-wider">
-            {{ $t('reset.new_password') }}
+            {{ $t('reset.new_password') || 'Password Baru' }}
           </label>
           <div class="relative">
             <div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors duration-300 group-focus-within:text-blue-500 dark:text-gray-500 dark:group-focus-within:text-cyan-400">
@@ -214,7 +224,7 @@ const handleReset = async () => {
 
         <div class="group">
           <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1 ml-1 tracking-wider">
-            {{ $t('reset.confirm_password') }}
+            {{ $t('reset.confirm_password') || 'Konfirmasi Password' }}
           </label>
           <div class="relative">
             <div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors duration-300 group-focus-within:text-blue-500 dark:text-gray-500 dark:group-focus-within:text-cyan-400">
@@ -256,7 +266,7 @@ const handleReset = async () => {
           <div class="absolute inset-0 bg-white/30 transform -skew-x-12 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-1000"></div>
           
           <span class="relative z-10 flex items-center text-sm tracking-wide">
-            <span v-if="!isSubmitting">{{ $t('reset.btn_submit') }}</span>
+            <span v-if="!isSubmitting">{{ $t('reset.btn_submit') || 'Reset Password' }}</span>
             <span v-else>Memproses...</span>
             <svg v-if="!isSubmitting" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-2 transition-transform duration-300 group-hover/btn:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />

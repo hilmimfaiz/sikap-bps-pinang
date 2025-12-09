@@ -7,6 +7,16 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
 
+  runtimeConfig: {
+
+    resendApiKey: process.env.RESEND_API_KEY,
+    resendFrom: process.env.RESEND_FROM,
+
+    public: {
+      apiBase: '/api'
+    }
+  },
+
   // Optimasi Memori: Matikan sourcemap di server & client
   sourcemap: {
     server: false,
