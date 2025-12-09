@@ -120,6 +120,34 @@ const toggleSelection = (id: number) => {
   else selectedFileIds.value.push(id)
 }
 
+// --- LOGIC: SELECT ALL FOR SHARING ---
+
+// 1. Logic Select All untuk Share File
+const isAllFileUsersSelected = computed(() => {
+  return allUsers.value.length > 0 && shareFileUserIds.value.length === allUsers.value.length
+})
+
+const toggleAllFileUsers = () => {
+  if (isAllFileUsersSelected.value) {
+    shareFileUserIds.value = [] // Unselect All
+  } else {
+    shareFileUserIds.value = allUsers.value.map(u => u.id) // Select All
+  }
+}
+
+// 2. Logic Select All untuk Share Folder
+const isAllFolderUsersSelected = computed(() => {
+  return allUsers.value.length > 0 && shareFolderUserIds.value.length === allUsers.value.length
+})
+
+const toggleAllFolderUsers = () => {
+  if (isAllFolderUsersSelected.value) {
+    shareFolderUserIds.value = [] // Unselect All
+  } else {
+    shareFolderUserIds.value = allUsers.value.map(u => u.id) // Select All
+  }
+}
+
 // --- ACTIONS: CREATE SUB-FOLDER ---
 const openCreateFolder = () => {
   showAddDropdown.value = false
@@ -249,7 +277,6 @@ const openUploadModalTrigger = () => {
 const onFileChange = (e: any) => {
   const file = e.target.files[0]
   if (file) {
-    // UPDATE: Validasi ukuran file menjadi 100MB (100 * 1024 * 1024 byte)
     if (file.size > 100 * 1024 * 1024) { 
       e.target.value = null; 
       return toast.warning(t('users.modal.file_limit_info')) 
@@ -730,6 +757,17 @@ const getDownloadUrl = (path: string) => path
             <button @click="showShareFileModal = false" class="text-gray-400 hover:text-gray-600 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
           </div>
           <p class="text-xs text-gray-500 mb-4">{{ $t('archives.modal.share_file_desc') }}</p>
+          
+          <div class="flex justify-end mb-2">
+            <button 
+              @click="toggleAllFileUsers" 
+              class="text-xs font-medium text-blue-600 hover:text-blue-800 transition flex items-center gap-1"
+            >
+              <span v-if="isAllFileUsersSelected">Batal Pilih Semua</span>
+              <span v-else>Pilih Semua</span>
+            </button>
+          </div>
+
           <div class="flex-1 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-xl p-2 mb-4 bg-gray-50/50 dark:bg-gray-800/30">
             <div v-if="allUsers.length === 0" class="text-center py-4 text-gray-400 italic text-xs">{{ $t('archives.modal.no_users') }}</div>
             <label v-for="u in allUsers" :key="u.id" class="flex items-center gap-3 p-2.5 hover:bg-white dark:hover:bg-gray-800 rounded-lg cursor-pointer transition border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
@@ -757,6 +795,17 @@ const getDownloadUrl = (path: string) => path
             <button @click="showShareFolderModal = false" class="text-gray-400 hover:text-gray-600 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
           </div>
           <p class="text-xs text-gray-500 mb-4">{{ $t('archives.modal.share_folder_desc') }}</p>
+          
+          <div class="flex justify-end mb-2">
+            <button 
+              @click="toggleAllFolderUsers" 
+              class="text-xs font-medium text-blue-600 hover:text-blue-800 transition flex items-center gap-1"
+            >
+              <span v-if="isAllFolderUsersSelected">Batal Pilih Semua</span>
+              <span v-else>Pilih Semua</span>
+            </button>
+          </div>
+
           <div class="flex-1 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-xl p-2 mb-4 bg-gray-50/50 dark:bg-gray-800/30">
             <div v-if="allUsers.length === 0" class="text-center py-4 text-gray-400 italic text-xs">{{ $t('archives.modal.no_users') }}</div>
             <label v-for="u in allUsers" :key="u.id" class="flex items-center gap-3 p-2.5 hover:bg-white dark:hover:bg-gray-800 rounded-lg cursor-pointer transition border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
