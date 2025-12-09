@@ -1,34 +1,46 @@
 import bcrypt from 'bcrypt'
+import { createError, defineEventHandler, readBody } from 'h3'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const { token, newPassword } = body
+  // [PENTING] Menerima email, otp, dan password baru
+  const { email, otp, newPassword } = body
 
-  if (!token || !newPassword) {
-    throw createError({ statusCode: 400, message: 'Data tidak lengkap' })
+  if (!email || !otp || !newPassword) {
+    throw createError({ statusCode: 400, message: 'Data tidak lengkap (Email, OTP, Password)' })
   }
 
-  // 1. Cari User berdasarkan Token & Cek Expiry
-  const user = await prisma.user.findFirst({
-    where: {
-      resetToken: token,
-      resetTokenExpiry: { gt: new Date() } // Expiry harus lebih besar dari sekarang
-    }
+  // 1. Cari User berdasarkan Email
+  const user = await prisma.user.findUnique({
+    where: { email: email }
   })
 
   if (!user) {
-    throw createError({ statusCode: 400, message: 'Token tidak valid atau sudah kadaluarsa' })
+    throw createError({ statusCode: 404, message: 'User tidak ditemukan' })
   }
 
-  // 2. Hash Password Baru
+  // 2. Validasi Token/OTP
+  // Cek apakah token cocok DAN belum kadaluarsa
+  if (user.resetToken !== otp) {
+    throw createError({ statusCode: 400, message: 'Kode OTP salah' })
+  }
+
+  if (!user.resetTokenExpiry || new Date() > user.resetTokenExpiry) {
+    throw createError({ statusCode: 400, message: 'Kode OTP sudah kadaluarsa' })
+  }
+
+  // 3. Hash Password Baru
   const hashedPassword = await bcrypt.hash(newPassword, 10)
 
-  // 3. Update User & Hapus Token
+  // 4. Update User & Hapus Token
   await prisma.user.update({
     where: { id: user.id },
     data: {
       password: hashedPassword,
-      resetToken: null,       // Hapus token agar tidak bisa dipakai lagi
+      resetToken: null,
       resetTokenExpiry: null
     }
   })

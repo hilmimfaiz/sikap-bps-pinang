@@ -1,10 +1,6 @@
-// server/api/auth/forgot-password.post.ts
+import { createError, defineEventHandler, readBody } from 'h3'
 
-import crypto from 'crypto'
-import { createError, defineEventHandler, readBody, getHeader } from 'h3'
-
-// `sendResetEmail` di-auto-import dari `~/server/utils/mail.ts`
-// `prisma` di-auto-import dari `~/server/utils/prisma.ts`
+// `sendResetEmail` dan `prisma` di-auto-import oleh Nuxt
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -18,56 +14,41 @@ export default defineEventHandler(async (event) => {
     where: { email: body.email }
   })
 
-  // [FIX] Validasi Ketat: Jika user tidak ditemukan, lempar Error
-  // Ini memastikan hanya email yang terdaftar yang bisa memproses reset
   if (!user) {
     throw createError({ 
       statusCode: 404, 
-      message: 'Email tidak terdaftar di sistem. Silakan periksa kembali email Anda.' 
+      message: 'Email tidak terdaftar di sistem.' 
     })
   }
 
-  // 2. Generate Token Unik
-  const token = crypto.randomBytes(32).toString('hex')
-  const expiry = new Date(Date.now() + 3600000) // Berlaku 1 jam dari sekarang
+  // 2. Generate OTP 6 Digit
+  const otp = Math.floor(100000 + Math.random() * 900000).toString() 
+  const expiry = new Date(Date.now() + 3600000) // 1 jam dari sekarang
 
-  // 3. Simpan Token ke DB
+  // 3. Simpan OTP ke DB
   try {
     await prisma.user.update({
       where: { email: body.email },
       data: {
-        resetToken: token, 
+        resetToken: otp, 
         resetTokenExpiry: expiry
       }
     })
   } catch (e: any) {
      console.error('Prisma update error:', e)
-     throw createError({ statusCode: 500, message: 'Gagal menyimpan token reset.' })
+     throw createError({ statusCode: 500, message: 'Gagal menyimpan kode OTP.' })
   }
 
-  // 4. Construct reset URL - Logika Dinamis (Ngrok/Dynamic URL)
-  const protocol = getHeader(event, 'x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : 'http')
-  const host = getHeader(event, 'host') 
-
-  let resetBaseUrl: string
-  if (host) {
-    resetBaseUrl = `${protocol}://${host}`
-  } else {
-    resetBaseUrl = process.env.NUXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-  }
-  
-  const resetUrl = `${resetBaseUrl}/reset-password?token=${token}`
-
-  // 5. Kirim Email
+  // 4. Kirim Email via Resend
   try {
-      await sendResetEmail(user.email, resetUrl) 
+      const isSent = await sendResetEmail(user.email, otp) 
+      if (!isSent) {
+        throw new Error('Resend failed to deliver')
+      }
   } catch (error) {
       console.error('Gagal mengirim email:', error);
-      // Opsional: Anda bisa throw error di sini jika ingin user tahu email gagal terkirim,
-      // tapi biasanya kita biarkan sukses agar token tetap valid jika user mau coba resend manual/hubungi admin.
-      throw createError({ statusCode: 500, message: 'Gagal mengirim email reset password.' })
+      throw createError({ statusCode: 500, message: 'Gagal mengirim email kode OTP.' })
   }
   
-  // 6. Return Sukses
-  return { message: 'Tautan reset kata sandi telah dikirim ke email Anda.' }
+  return { message: 'Kode OTP telah dikirim ke email Anda.' }
 })
