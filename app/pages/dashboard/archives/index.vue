@@ -19,6 +19,7 @@ const page = ref(1)
 const limit = ref(10)
 
 // Fetch Data (Server-side Pagination)
+// API ini sekarang hanya akan mengembalikan folder dengan parentId = null
 const { data: response, pending, refresh, error } = await useFetch('/api/folders', {
   query: { search, page, limit },
   watch: [page, search]
@@ -79,7 +80,6 @@ const canManage = (folder: any) => {
 const isAllSelected = computed({
   get: () => {
     if (!folders.value || folders.value.length === 0) return false
-    // Hanya pilih yang punya akses manage
     const manageableFolders = folders.value.filter((f: any) => canManage(f))
     return manageableFolders.length > 0 && manageableFolders.every((f: any) => selectedFolderIds.value.includes(f.id))
   },
@@ -134,11 +134,12 @@ const handleBulkDelete = async () => {
   }
 }
 
-// Create Folder
+// Create Folder (Root Folder)
 const handleCreate = async () => {
   if (!newFolderName.value.trim()) return toast.warning(t('archives.messages.name_required'))
   startLoading(t('archives.messages.create_process'))
   try {
+    // Note: parentId tidak dikirim, artinya ini Folder Utama (Root)
     await $fetch('/api/folders/create', {
       method: 'POST',
       body: { name: newFolderName.value, userId: user.value?.id }

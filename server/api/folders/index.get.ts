@@ -15,9 +15,13 @@ export default defineEventHandler(async (event) => {
     if (!userCookie) throw createError({ statusCode: 401, message: 'Unauthorized' })
     const user = JSON.parse(userCookie)
 
-    // 1. Bangun Kondisi Filter (Permission + Search)
+    // 1. Bangun Kondisi Filter
     let whereCondition: any = {
-      AND: []
+      AND: [
+        // [FIX] Filter Wajib: Hanya ambil folder utama (yang parentId-nya null)
+        // Subfolder tidak akan muncul di list utama, tapi tetap ada di DB
+        { parentId: null } 
+      ]
     }
 
     // A. Filter Permission (Jika bukan admin)
@@ -40,11 +44,6 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Jika AND kosong (Admin tanpa search), hapus properti AND agar tidak error atau query semua
-    if (whereCondition.AND.length === 0) {
-      delete whereCondition.AND
-    }
-
     // 2. Hitung Total Data
     const totalCount = await prisma.folder.count({
       where: whereCondition
@@ -54,7 +53,7 @@ export default defineEventHandler(async (event) => {
     const folders = await prisma.folder.findMany({
       where: whereCondition,
       include: {
-        _count: { select: { archives: true } },
+        _count: { select: { archives: true } }, // Hitung file di dalamnya
         user: { select: { name: true } },
         shares: { select: { userId: true } }
       },
