@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
 definePageMeta({
   layout: 'default',
@@ -20,35 +20,86 @@ const confirmPassword = ref('')
 const showPassword = ref(false)
 const isSubmitting = ref(false)
 
-// Ambil email dari query parameter jika ada (dari link di email jika Anda buat link nanti)
-// Atau dari input user di halaman sebelumnya (forgot-password)
+// Ambil email dari query parameter jika ada
 onMounted(() => {
   if (route.query.email) {
     email.value = route.query.email as string
   }
 })
 
+// --- LOGIKA VALIDASI PASSWORD ---
+
+// Helper Computed untuk checklist visual (Memindahkan Regex ke sini agar aman dari error template)
+const isStartWithUpper = computed(() => /^[A-Z]/.test(password.value))
+const isHasNumber = computed(() => /\d/.test(password.value))
+const isHasSymbol = computed(() => /[!@#$%^&*(),.?":{}|<>]/.test(password.value))
+
+/**
+ * Mengembalikan level kekuatan password:
+ * 0: Kosong / Sangat Pendek
+ * 1: Lemah (Tidak Diizinkan) -> Tidak memenuhi syarat Medium
+ * 2: Sedang (Diizinkan) -> Awal Huruf Besar + Ada Angka
+ * 3: Kuat (Lebih Diizinkan) -> Awal Huruf Besar + Ada Angka + Ada Simbol
+ */
+const passwordStrengthLevel = computed(() => {
+  const pwd = password.value
+  if (!pwd) return 0
+  if (pwd.length < 8) return 1 // Minimal 8 karakter agar aman
+
+  // Gunakan hasil computed di atas
+  const startsWithUpper = isStartWithUpper.value
+  const hasNumber = isHasNumber.value
+  const hasSymbol = isHasSymbol.value
+
+  // Logika Penentuan Level
+  // Jika tidak memenuhi syarat dasar (Awal Besar & Ada Angka), maka LEMAH
+  if (!startsWithUpper || !hasNumber) {
+    return 1 // Lemah
+  }
+
+  // Jika memenuhi syarat dasar:
+  if (hasSymbol) {
+    return 3 // Kuat (Ada simbol)
+  } else {
+    return 2 // Sedang (Tanpa simbol, tapi sudah Awal Besar & Angka)
+  }
+})
+
+const passwordStrengthLabel = computed(() => {
+  switch (passwordStrengthLevel.value) {
+    case 0: return '...'
+    case 1: return 'Lemah (Tidak Diizinkan)'
+    case 2: return 'Sedang'
+    case 3: return 'Kuat'
+    default: return ''
+  }
+})
+
+// --- END LOGIKA VALIDASI ---
+
 const handleReset = async () => {
-  // 1. Validasi Frontend Dasar
+  // 1. Validasi Input Kosong
   if (!email.value || !otp.value || !password.value) {
     return toast.warning('Mohon lengkapi email, kode OTP, dan password baru')
   }
   
-  // Validasi Kecocokan Password
+  // 2. Validasi Kekuatan Password (Aturan Baru)
+  const strength = passwordStrengthLevel.value
+  if (strength < 2) {
+    // Jika level 1 (Lemah), tolak.
+    return toast.warning('Password Lemah: Harus diawali Huruf Besar, mengandung Angka, dan min. 8 karakter.')
+  }
+
+  // 3. Validasi Kecocokan Password
   if (password.value !== confirmPassword.value) {
     return toast.warning(t('reset.password_mismatch') || 'Password konfirmasi tidak cocok')
-  }
-  
-  // Validasi Panjang Password
-  if (password.value.length < 6) {
-    return toast.warning(t('reset.password_min') || 'Password minimal 6 karakter')
   }
 
   isSubmitting.value = true
   startLoading('Memverifikasi OTP & Mereset...')
   
   try {
-    // 2. Panggil API Backend
+    // 4. Panggil API Backend
     const response = await $fetch('/api/auth/reset-password', {
       method: 'POST',
       body: { 
@@ -58,22 +109,21 @@ const handleReset = async () => {
       }
     })
     
-    // 3. Sukses
+    // 5. Sukses
     await stopLoading()
     isSubmitting.value = false
     toast.success(response.message || 'Password berhasil diubah!')
     
-    // Redirect ke Login setelah sukses dengan jeda sedikit
+    // Redirect ke Login
     setTimeout(() => {
       router.push('/login')
     }, 1500)
 
   } catch (e: any) {
-    // 4. Error Handling
+    // 6. Error Handling
     await stopLoading()
     isSubmitting.value = false
     
-    // Ambil pesan error dari backend (misal: OTP expired, User not found, dll)
     const errorMessage = e.data?.message || 'Gagal mereset password. Silakan coba lagi.'
     toast.error(errorMessage)
   }
@@ -87,19 +137,13 @@ const handleReset = async () => {
       <div class="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-blue-200/40 to-cyan-100/30 rounded-full blur-3xl animate-float-slow dark:from-blue-600/20 dark:to-cyan-400/10"></div>
       <div class="absolute top-1/2 -left-20 w-80 h-80 bg-gradient-to-br from-slate-200/30 to-blue-100/20 rounded-full blur-3xl animate-float-slow delay-1500 dark:from-gray-800/30 dark:to-blue-900/20"></div>
       <div class="absolute bottom-20 right-1/4 w-60 h-60 bg-gradient-to-br from-cyan-200/25 to-blue-300/20 rounded-full blur-3xl animate-float-slow delay-1000 dark:from-cyan-500/15 dark:to-blue-700/10"></div>
-      
       <div class="absolute inset-0 bg-[linear-gradient(rgba(59,130,246,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.03)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_50%,black,transparent)] dark:bg-[linear-gradient(rgba(59,130,246,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.05)_1px,transparent_1px)] animate-grid-flow"></div>
-      
-      <div class="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-400/30 rounded-full animate-float-fast dark:bg-cyan-400/40"></div>
-      <div class="absolute top-1/3 right-1/3 w-1 h-1 bg-cyan-300/40 rounded-full animate-float-fast delay-500 dark:bg-blue-400/50"></div>
-      <div class="absolute bottom-1/4 left-1/3 w-1.5 h-1.5 bg-blue-300/25 rounded-full animate-float-fast delay-1000 dark:bg-cyan-300/30"></div>
     </div>
 
     <div class="absolute top-6 left-6 z-10 animate-fade-in-down">
       <NuxtLink 
         to="/login" 
         class="flex items-center gap-2 px-3 py-2 bg-white/80 backdrop-blur-xl border border-slate-200/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-500 text-xs sm:text-sm font-medium text-slate-600 hover:text-blue-600 group hover:-translate-y-0.5 hover:border-blue-300/50 dark:bg-gray-900/60 dark:border-gray-700/50 dark:text-gray-300 dark:hover:text-cyan-400 dark:hover:border-cyan-400/30"
-        :title="$t('reset.back_login') || 'Kembali ke Login'"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -117,8 +161,6 @@ const handleReset = async () => {
       
       <div class="absolute inset-0 rounded-[1.5rem] bg-gradient-to-r from-blue-500/5 via-cyan-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 dark:from-cyan-500/10 dark:via-blue-600/10 dark:to-indigo-500/10"></div>
       
-      <div class="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-slate-100/10 rounded-[1.5rem] dark:from-white/5 dark:via-transparent dark:to-black/10"></div>
-
       <div class="text-center mb-6 relative z-10">
         <div class="relative inline-block mb-3">
           <div class="absolute -inset-4 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full blur-lg opacity-20 group-hover:opacity-30 transition-opacity duration-500 dark:from-cyan-500 dark:to-blue-600"></div>
@@ -133,32 +175,43 @@ const handleReset = async () => {
           {{ $t('reset.title') || 'Reset Password' }}
         </h1>
         <p class="text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
-          {{ $t('reset.subtitle') || 'Masukkan Kode OTP dan Kata Sandi Baru' }}
+          {{ $t('reset.subtitle') || 'Buat password baru yang aman' }}
         </p>
       </div>
 
-      <div class="mb-5 relative z-10">
+      <div class="mb-5 relative z-10 bg-slate-50 dark:bg-gray-800/50 p-3 rounded-xl border border-slate-100 dark:border-gray-700/50">
         <div class="flex justify-between items-center mb-1.5">
-          <span class="text-[10px] font-semibold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Kekuatan Password</span>
-          <span class="text-[10px] font-medium" :class="{
-            'text-red-500': password.length > 0 && password.length < 6,
-            'text-yellow-500': password.length >= 6 && password.length < 8,
-            'text-green-500': password.length >= 8,
-            'text-slate-400 dark:text-gray-600': password.length === 0
+          <span class="text-[10px] font-semibold text-slate-600 dark:text-gray-400 uppercase tracking-wider">Kualitas Password</span>
+          <span class="text-[10px] font-bold transition-colors duration-300" :class="{
+            'text-red-500': passwordStrengthLevel === 1,
+            'text-yellow-500': passwordStrengthLevel === 2,
+            'text-green-500': passwordStrengthLevel === 3,
+            'text-slate-400': passwordStrengthLevel === 0
           }">
-            {{ password.length > 0 && password.length < 6 ? 'Lemah' : password.length >= 6 && password.length < 8 ? 'Sedang' : password.length >= 8 ? 'Kuat' : '...' }}
+            {{ passwordStrengthLabel }}
           </span>
         </div>
-        <div class="w-full bg-slate-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+        <div class="w-full bg-slate-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
           <div class="h-full rounded-full transition-all duration-500 ease-out" :class="{
-            'bg-red-500': password.length > 0 && password.length < 6,
-            'bg-yellow-500': password.length >= 6 && password.length < 8,
-            'bg-green-500': password.length >= 8,
-            'w-0': password.length === 0,
-            'w-1/3': password.length > 0 && password.length < 6,
-            'w-2/3': password.length >= 6 && password.length < 8,
-            'w-full': password.length >= 8
+            'bg-red-500': passwordStrengthLevel === 1,
+            'bg-yellow-500': passwordStrengthLevel === 2,
+            'bg-green-500': passwordStrengthLevel === 3,
+            'w-0': passwordStrengthLevel === 0,
+            'w-1/3': passwordStrengthLevel === 1,
+            'w-2/3': passwordStrengthLevel === 2,
+            'w-full': passwordStrengthLevel === 3
           }"></div>
+        </div>
+        <div class="mt-2 text-[9px] sm:text-[10px] space-y-0.5 text-slate-500 dark:text-gray-400">
+           <p :class="{'text-green-600 dark:text-green-400': isStartWithUpper, 'opacity-60': !password}">
+             <span v-if="isStartWithUpper">✓</span><span v-else>○</span> Diawali huruf besar (contoh: A)
+           </p>
+           <p :class="{'text-green-600 dark:text-green-400': isHasNumber, 'opacity-60': !password}">
+             <span v-if="isHasNumber">✓</span><span v-else>○</span> Mengandung angka (0-9)
+           </p>
+           <p :class="{'text-green-600 dark:text-green-400': isHasSymbol, 'opacity-60': !password}">
+             <span v-if="isHasSymbol">✓</span><span v-else>○</span> Mengandung simbol (menguatkan password)
+           </p>
         </div>
       </div>
 
@@ -194,7 +247,6 @@ const handleReset = async () => {
               class="w-full pl-10 pr-4 py-2.5 bg-slate-50/80 backdrop-blur-sm border border-slate-300/50 text-slate-900 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all duration-500 placeholder-slate-400 focus:shadow-lg focus:scale-[1.02] group-hover:border-slate-400 focus:bg-white/90 dark:bg-black/40 dark:border-gray-700/50 dark:text-white dark:placeholder-gray-500 dark:focus:ring-cyan-500/50 dark:focus:border-cyan-500 dark:group-hover:border-gray-500 dark:focus:bg-black/60 font-mono tracking-[0.4em] text-center font-bold text-base uppercase"
               placeholder="123456"
             />
-            <div class="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 to-cyan-500/5 opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 pointer-events-none dark:from-cyan-500/5 dark:to-blue-500/5"></div>
           </div>
         </div>
 
@@ -213,7 +265,12 @@ const handleReset = async () => {
               :type="showPassword ? 'text' : 'password'" 
               required
               class="w-full pl-10 pr-10 py-2.5 bg-slate-50/80 backdrop-blur-sm border border-slate-300/50 text-slate-900 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all duration-500 placeholder-slate-400 focus:shadow-lg focus:scale-[1.02] group-hover:border-slate-400 focus:bg-white/90 dark:bg-black/40 dark:border-gray-700/50 dark:text-white dark:placeholder-gray-500 dark:focus:ring-cyan-500/50 dark:focus:border-cyan-500 dark:group-hover:border-gray-500 dark:focus:bg-black/60 text-sm"
-              placeholder="Min. 6 karakter"
+              :class="{
+                'border-red-500 focus:border-red-500': password && passwordStrengthLevel === 1,
+                'border-yellow-500 focus:border-yellow-500': passwordStrengthLevel === 2,
+                'border-green-500 focus:border-green-500': passwordStrengthLevel === 3
+              }"
+              placeholder="Min. 8 kar, Awal Huruf Besar & Angka"
             />
             <button type="button" @click="showPassword = !showPassword" class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-blue-500 focus:outline-none transition-all duration-300 rounded-lg hover:bg-slate-200/50 backdrop-blur-sm dark:text-gray-500 dark:hover:text-cyan-400 dark:hover:bg-gray-700/50" tabindex="-1">
               <svg v-if="showPassword" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -237,7 +294,7 @@ const handleReset = async () => {
               :type="showPassword ? 'text' : 'password'" 
               required
               class="w-full pl-10 pr-4 py-2.5 bg-slate-50/80 backdrop-blur-sm border border-slate-300/50 text-slate-900 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all duration-500 placeholder-slate-400 focus:shadow-lg focus:scale-[1.02] group-hover:border-slate-400 focus:bg-white/90 dark:bg-black/40 dark:border-gray-700/50 dark:text-white dark:placeholder-gray-500 dark:focus:ring-cyan-500/50 dark:focus:border-cyan-500 dark:group-hover:border-gray-500 dark:focus:bg-black/60 text-sm"
-              placeholder="Konfirmasi password"
+              placeholder="Ulangi password baru"
               :class="{
                 'border-green-500 dark:border-green-400': confirmPassword && password === confirmPassword,
                 'border-red-500 dark:border-red-400': confirmPassword && password !== confirmPassword
@@ -257,7 +314,7 @@ const handleReset = async () => {
 
         <button 
           type="submit" 
-          :disabled="isSubmitting || !password || !confirmPassword || password !== confirmPassword"
+          :disabled="isSubmitting || passwordStrengthLevel < 2 || password !== confirmPassword"
           class="w-full bg-gradient-to-r from-blue-600 via-cyan-600 to-indigo-600 hover:from-blue-500 hover:via-cyan-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl shadow-xl shadow-blue-500/30 hover:shadow-2xl hover:shadow-blue-500/40 transition-all duration-500 transform hover:-translate-y-0.5 active:scale-95 flex justify-center items-center gap-2 group/btn relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none dark:from-cyan-600 dark:via-blue-600 dark:to-indigo-600 dark:hover:from-cyan-500 dark:hover:via-blue-500 dark:hover:to-indigo-500 dark:shadow-blue-500/30 dark:hover:shadow-blue-500/40 mt-6"
           :class="isSubmitting ? 'cursor-wait' : ''"
         >
@@ -284,7 +341,7 @@ const handleReset = async () => {
 </template>
 
 <style scoped>
-/* Animations (Sama seperti sebelumnya) */
+/* Animations */
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(40px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes fadeInDown { from { opacity: 0; transform: translateY(-40px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes float-slow { 0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); } 33% { transform: translateY(-30px) rotate(3deg) scale(1.05); } 66% { transform: translateY(15px) rotate(-2deg) scale(0.95); } }
