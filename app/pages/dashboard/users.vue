@@ -119,8 +119,14 @@ onMounted(() => {
 })
 
 // --- VALIDATOR HELPER ---
-// Regex: Hanya huruf (a-z, A-Z), spasi, titik, dan koma
+// Regex Nama: Hanya huruf (a-z, A-Z), spasi, titik, dan koma
 const nameRegex = /^[a-zA-Z .,]+$/
+
+// Regex Email FIX: 
+// 1. Username (depan @): Huruf dan Angka [a-zA-Z0-9]+
+// 2. Pemisah: @
+// 3. Domain (belakang @): Boleh Huruf, Angka, Titik, Strip
+const emailRegex = /^[a-zA-Z0-9]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9]+$/
 
 // --- ACTIONS ---
 
@@ -169,6 +175,11 @@ const handleCreateUser = async () => {
   // --- VALIDASI NAMA ---
   if (!nameRegex.test(form.value.name)) {
     return toast.warning('Nama hanya boleh berisi huruf, spasi, titik (.), dan koma (,)')
+  }
+
+  // --- VALIDASI EMAIL ---
+  if (!emailRegex.test(form.value.email)) {
+    return toast.warning('Format email salah. Bagian depan (sebelum @) hanya boleh huruf dan angka. Contoh: pegawai123@sikap.com')
   }
   // ---------------------
 
@@ -254,6 +265,11 @@ const handleUpdateUser = async () => {
   // --- VALIDASI NAMA ---
   if (!nameRegex.test(form.value.name)) {
     return toast.warning('Nama hanya boleh berisi huruf, spasi, titik (.), dan koma (,)')
+  }
+
+  // --- VALIDASI EMAIL ---
+  if (!emailRegex.test(form.value.email)) {
+    return toast.warning('Format email salah. Bagian depan (sebelum @) hanya boleh huruf dan angka. Contoh: hilmifaiz744@gmail.com')
   }
   // ---------------------
 
