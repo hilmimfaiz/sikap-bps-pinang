@@ -118,6 +118,10 @@ onMounted(() => {
   }, 100)
 })
 
+// --- VALIDATOR HELPER ---
+// Regex: Hanya huruf (a-z, A-Z), spasi, titik, dan koma
+const nameRegex = /^[a-zA-Z .,]+$/
+
 // --- ACTIONS ---
 
 const closeModals = () => {
@@ -162,6 +166,12 @@ const handleBulkDelete = async () => {
 
 // Create User
 const handleCreateUser = async () => {
+  // --- VALIDASI NAMA ---
+  if (!nameRegex.test(form.value.name)) {
+    return toast.warning('Nama hanya boleh berisi huruf, spasi, titik (.), dan koma (,)')
+  }
+  // ---------------------
+
   startLoading(t('users.messages.create_process'))
   try {
     await $fetch('/api/users/create', { method: 'POST', body: form.value })
@@ -240,6 +250,13 @@ const openEditModal = (user: any) => {
 
 const handleUpdateUser = async () => {
   if (!selectedUser.value) return
+
+  // --- VALIDASI NAMA ---
+  if (!nameRegex.test(form.value.name)) {
+    return toast.warning('Nama hanya boleh berisi huruf, spasi, titik (.), dan koma (,)')
+  }
+  // ---------------------
+
   startLoading(t('users.messages.update_process'))
   try {
     await $fetch(`/api/users/${selectedUser.value.id}`, {
