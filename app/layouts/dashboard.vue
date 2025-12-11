@@ -246,7 +246,6 @@ const isActive = (path: string) => {
                     <span v-else class="text-sm font-bold text-blue-600 dark:text-blue-300">{{ user.initial }}</span>
                   </div>
                 </div>
-                <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white dark:border-gray-900"></div>
               </div>
             </button>
 
