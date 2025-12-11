@@ -335,7 +335,6 @@ const handleBulkDelete = async () => {
                       <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center text-white font-bold text-xs shadow-md ring-2 ring-white dark:ring-gray-800">
                         {{ cat.inCharge.name.charAt(0).toUpperCase() }}
                       </div>
-                      <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-white dark:border-gray-800 rounded-full"></div>
                     </div>
                     <div class="font-medium text-sm text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                       {{ cat.inCharge.name }}
