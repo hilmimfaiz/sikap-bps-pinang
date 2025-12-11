@@ -297,6 +297,15 @@ const openUploadModalTrigger = () => {
 const onFileChange = (e: any) => {
   const file = e.target.files[0]
   if (file) {
+    // --- PERBAIKAN: Validasi Ukuran File Max 100MB ---
+    if (file.size > 100 * 1024 * 1024) { 
+      e.target.value = null; // Reset input file
+      uploadForm.value.file = null; 
+      uploadForm.value.title = '';
+      return toast.warning(t('users.modal.file_limit_info') || 'Ukuran file maksimal 100MB') 
+    }
+    // --------------------------------------------------
+
     uploadForm.value.file = file
     uploadForm.value.title = file.name.substring(0, file.name.lastIndexOf('.')) || file.name 
   } else { 
@@ -496,10 +505,7 @@ const handleBulkDelete = async () => {
 // --- HELPER ---
 const closeModals = () => {
   // Jika sedang upload, jangan tutup modal upload sembarangan kecuali dibatalkan lewat tombol
-  // Tapi jika user klik background (ini dipanggil), kita cek:
   if (isUploading.value && showUploadModal.value) {
-      // Opsional: Bisa blokir penutupan, atau otomatis batalkan.
-      // Di sini kita biarkan terbuka (return) agar tidak ter-cancel tidak sengaja
       return 
   }
 
