@@ -334,7 +334,7 @@
       "creator": "Creator",
       "total_files": "Total Files",
       "action": "Action",
-      "name": "Document Name",
+      "name": "File / Folder Name",
       "uploader": "Uploader",
       "size": "Size",
       "empty_folder": "This folder is empty.",
