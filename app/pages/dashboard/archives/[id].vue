@@ -38,6 +38,11 @@ const showShareFolderModal = ref(false)
 const showBulkDeleteConfirm = ref(false)
 const showDuplicateConfirm = ref(false) // Duplicate Warning
 
+// --- NEW: UPLOAD PROGRESS STATE ---
+const isUploading = ref(false)
+const uploadProgress = ref(0)
+const uploadStats = ref({ loaded: 0, total: 0 })
+
 // Forms & Data Holders
 const createFolderName = ref('')
 const newFolderName = ref('')
@@ -88,6 +93,15 @@ watch(page, () => { selectedFileIds.value = [] })
 
 const changePage = (newPage: number) => {
   if (newPage >= 1 && newPage <= meta.value.totalPages) page.value = newPage
+}
+
+// --- HELPER: FORMAT SIZE ---
+const formatSize = (bytes: number) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 // --- FETCH USERS ---
@@ -292,7 +306,7 @@ const onFileChange = (e: any) => {
   }
 }
 
-// --- [UPDATED] HANDLE UPLOAD LOGIC ---
+// --- [UPDATED] HANDLE UPLOAD LOGIC WITH PROGRESS ---
 const handleUpload = async (force: boolean = false) => {
   if (!uploadForm.value.file) return toast.warning(t('archives.messages.upload_error'))
 
@@ -310,21 +324,58 @@ const handleUpload = async (force: boolean = false) => {
     }
   }
 
-  // 2. Proses Upload (Jika force true atau tidak ada duplikat)
-  startLoading(t('archives.messages.upload_process'))
+  // 2. Persiapan Upload
+  isUploading.value = true
+  uploadProgress.value = 0
+  uploadStats.value = { loaded: 0, total: 0 }
+
   const formData = new FormData()
   formData.append('file', uploadForm.value.file)
   formData.append('title', uploadForm.value.title || uploadForm.value.file.name)
   formData.append('folderId', folderId)
-  formData.append('uploaderId', userCookie.value?.id)
-  
-  try {
-    await $fetch('/api/archives/upload', { method: 'POST', body: formData })
-    await refresh() 
-    closeModals(); await stopLoading(); toast.success(t('archives.messages.upload_success'))
-  } catch (e) { 
-    await stopLoading(); toast.error(t('archives.messages.upload_error')) 
+  if (userCookie.value?.id) {
+    formData.append('uploaderId', userCookie.value.id.toString())
   }
+  
+  // 3. Gunakan XHR untuk tracking progress
+  const xhr = new XMLHttpRequest()
+  xhr.open('POST', '/api/archives/upload')
+
+  // Event Progress
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      uploadProgress.value = (e.loaded / e.total) * 100
+      uploadStats.value = { loaded: e.loaded, total: e.total }
+    }
+  }
+
+  // Event Load (Selesai)
+  xhr.onload = async () => {
+    isUploading.value = false
+    if (xhr.status >= 200 && xhr.status < 300) {
+      // Sukses
+      await refresh()
+      closeModals()
+      toast.success(t('archives.messages.upload_success'))
+    } else {
+      // Error dari server
+      let msg = t('archives.messages.upload_error')
+      try {
+        const res = JSON.parse(xhr.responseText)
+        if (res.message) msg = res.message
+      } catch (e) {}
+      toast.error(msg)
+    }
+  }
+
+  // Event Error (Jaringan dll)
+  xhr.onerror = () => {
+    isUploading.value = false
+    toast.error(t('archives.messages.upload_error'))
+  }
+
+  // Kirim
+  xhr.send(formData)
 }
 
 // Fungsi bantu untuk lanjut upload (dipanggil dari Modal Konfirmasi)
@@ -409,10 +460,15 @@ const closeModals = () => {
   showBulkDeleteConfirm.value = false
   showDuplicateConfirm.value = false
   
+  // Reset states
   createFolderName.value = ''; newFolderName.value = ''; newSubFolderName.value = ''
-  newFileName.value = '' // Reset nama file
+  newFileName.value = '' 
   selectedFile.value = null; selectedSubFolder.value = null
   shareFileUserIds.value = []; shareFolderUserIds.value = []
+  
+  // Reset Upload states
+  isUploading.value = false
+  uploadProgress.value = 0
   
   // Jangan reset uploadForm jika hanya menutup modal duplikasi (biar user bisa rename), 
   // tapi reset jika menutup modal upload utama.
@@ -744,7 +800,8 @@ const getDownloadUrl = (path: string) => path
             <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ $t('archives.modal.upload_title') }}</h3>
             <button @click="showUploadModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
           </div>
-          <form @submit.prevent="handleUpload(false)" class="space-y-4">
+          
+          <form v-if="!isUploading" @submit.prevent="handleUpload(false)" class="space-y-4">
             <div>
               <label class="block text-xs font-semibold mb-1.5 text-gray-600 dark:text-gray-300 uppercase">{{ $t('archives.modal.file_label') }}</label>
               <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 text-center hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition relative cursor-pointer">
@@ -766,6 +823,25 @@ const getDownloadUrl = (path: string) => path
               <button type="submit" class="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg shadow-md transition text-xs font-medium">{{ $t('common.upload') }}</button>
             </div>
           </form>
+
+          <div v-else class="py-8 text-center space-y-4">
+            <div class="relative w-20 h-20 mx-auto">
+              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <path class="text-gray-200 dark:text-gray-700" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path class="text-blue-600 transition-all duration-300 ease-out" stroke-dasharray="100, 100" :stroke-dashoffset="100 - uploadProgress" stroke-width="3" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+              <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-sm font-bold text-gray-700 dark:text-gray-200">
+                {{ Math.round(uploadProgress) }}%
+              </div>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-1">{{ $t('archives.messages.upload_process') }}</h4>
+              <p class="text-xs text-gray-500 dark:text-gray-400">
+                {{ formatSize(uploadStats.loaded) }} / {{ formatSize(uploadStats.total) }}
+              </p>
+            </div>
+          </div>
+
         </div>
       </div>
     </Transition>
