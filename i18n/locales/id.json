@@ -22,10 +22,11 @@
     "back": "Kembali",
     "yes_delete": "Ya, Hapus",
     "yes_continue": "Ya, Lanjutkan",
-    "delete_all": "Hapus Semua"
+    "delete_all": "Hapus Semua",
+    "keep_save": "Tetap Simpan"
   },
   "header": {
-    "title": "Panel Pengguna",
+    "title": "Panel Administrator",
     "subtitle": "Sistem Informasi Kearsipan Digital",
     "logout": "Keluar",
     "profile": "Profil",
@@ -342,6 +343,7 @@
     "modal": {
       "create_title": "Buat Folder Baru",
       "rename_title": "Ganti Nama Folder",
+      "rename_file_title": "Ganti Nama File",
       "delete_title": "Hapus Folder?",
       "upload_title": "Upload File Baru",
       "delete_file_title": "Hapus File?",
@@ -359,7 +361,9 @@
       "delete_desc": "akan dihapus permanen beserta isinya.",
       "delete_file_desc": "akan dihapus permanen.",
       "bulk_delete_title": "Hapus {n} Item?",
-      "bulk_delete_desc": "Tindakan ini tidak dapat dibatalkan."
+      "bulk_delete_desc": "Tindakan ini tidak dapat dibatalkan.",
+      "duplicate_title": "File Duplikat Terdeteksi",
+      "duplicate_desc": "File dengan nama dan ukuran yang sama sudah ada di folder ini. Apakah Anda ingin tetap menyimpannya (sebagai salinan) atau batalkan untuk mengubah nama?"
     },
     "messages": {
       "name_required": "Nama folder wajib diisi",
@@ -369,6 +373,9 @@
       "rename_process": "Mengubah Nama...",
       "rename_success": "Nama folder diperbarui",
       "rename_error": "Gagal mengubah nama folder",
+      "rename_file_process": "Mengubah nama file...",
+      "rename_file_success": "Nama file berhasil diubah",
+      "rename_file_error": "Gagal mengubah nama file",
       "delete_process": "Menghapus Folder...",
       "delete_success": "Folder berhasil dihapus",
       "delete_error": "Gagal menghapus folder",

@@ -22,10 +22,11 @@
     "back": "Back",
     "yes_delete": "Yes, Delete",
     "yes_continue": "Yes, Continue",
-    "delete_all": "Delete All"
+    "delete_all": "Delete All",
+    "keep_save": "Keep Saving"
   },
   "header": {
-    "title": "User Panel",
+    "title": "Administrator Panel",
     "subtitle": "Digital Archiving Information System",
     "logout": "Logout",
     "profile": "Profile",
@@ -336,11 +337,13 @@
       "name": "Document Name",
       "uploader": "Uploader",
       "size": "Size",
-      "empty_folder": "This folder is empty."
+      "empty_folder": "This folder is empty.",
+      "empty_search": "No search results found."
     },
     "modal": {
       "create_title": "Create New Folder",
       "rename_title": "Rename Folder",
+      "rename_file_title": "Rename File",
       "delete_title": "Delete Folder?",
       "upload_title": "Upload New File",
       "delete_file_title": "Delete File?",
@@ -358,7 +361,9 @@
       "delete_desc": "will be permanently deleted along with its contents.",
       "delete_file_desc": "will be permanently deleted.",
       "bulk_delete_title": "Delete {n} Items?",
-      "bulk_delete_desc": "This action cannot be undone."
+      "bulk_delete_desc": "This action cannot be undone.",
+      "duplicate_title": "Duplicate File Detected",
+      "duplicate_desc": "A file with the same name and size already exists in this folder. Do you want to keep saving it (as a copy) or cancel to rename?"
     },
     "messages": {
       "name_required": "Folder name is required",
@@ -368,6 +373,9 @@
       "rename_process": "Renaming...",
       "rename_success": "Folder name updated",
       "rename_error": "Failed to rename folder",
+      "rename_file_process": "Renaming file...",
+      "rename_file_success": "File name updated successfully",
+      "rename_file_error": "Failed to rename file",
       "delete_process": "Deleting Folder...",
       "delete_success": "Folder deleted successfully",
       "delete_error": "Failed to delete folder",
@@ -454,36 +462,36 @@
     }
   },
   "chat": {
-    "new_contact": "Kontak Baru",
-    "messages": "Pesan",
-    "no_contacts": "Tidak ada kontak ditemukan",
-    "no_conversations": "Belum ada percakapan",
-    "start_new_chat": "Mulai Chat Baru",
-    "reply_to": "Balas ke",
-    "yourself": "Diri sendiri",
-    "type_message": "Tulis pesan...",
+    "new_contact": "New Contact",
+    "messages": "Messages",
+    "no_contacts": "No contacts found",
+    "no_conversations": "No conversations yet",
+    "start_new_chat": "Start New Chat",
+    "reply_to": "Reply to",
+    "yourself": "Yourself",
+    "type_message": "Type a message...",
     "chat_admin_tooltip": "Chat Admin",
-    "delete_confirm_title": "Hapus Pesan?",
-    "delete_confirm": "Hapus pesan ini? Pesan akan ditarik untuk semua orang.",
-    "delete_error": "Gagal menghapus pesan."
+    "delete_confirm_title": "Delete Message?",
+    "delete_confirm": "Delete this message? It will be retracted for everyone.",
+    "delete_error": "Failed to delete message."
   },
   "notifications": {
-    "title": "Notifikasi",
-    "read_all": "Baca Semua",
-    "delete_history": "Hapus Riwayat",
-    "delete_1h": "1 Jam Terakhir",
-    "delete_24h": "24 Jam (Hari Ini)",
-    "delete_7d": "7 Hari Terakhir",
-    "delete_30d": "1 Bulan Terakhir",
-    "delete_old": "Lebih dari 6 Bulan",
-    "empty_title": "Tidak ada notifikasi baru",
-    "empty_desc": "Semua pemberitahuan akan muncul di sini",
-    "confirm_delete": "Apakah Anda yakin ingin menghapus riwayat notifikasi ini?",
-    "delete_error": "Gagal menghapus notifikasi",
-    "load_error": "Gagal mengambil notifikasi",
-    "time_just_now": "Baru saja",
-    "time_minutes_ago": "{min} menit lalu",
-    "time_hours_ago": "{hour} jam lalu"
+    "title": "Notifications",
+    "read_all": "Read All",
+    "delete_history": "Clear History",
+    "delete_1h": "Last 1 Hour",
+    "delete_24h": "24 Hours (Today)",
+    "delete_7d": "Last 7 Days",
+    "delete_30d": "Last 1 Month",
+    "delete_old": "Older than 6 Months",
+    "empty_title": "No new notifications",
+    "empty_desc": "All notifications will appear here",
+    "confirm_delete": "Are you sure you want to clear this notification history?",
+    "delete_error": "Failed to delete notifications",
+    "load_error": "Failed to load notifications",
+    "time_just_now": "Just now",
+    "time_minutes_ago": "{min} mins ago",
+    "time_hours_ago": "{hour} hours ago"
   },
   "roles": {
     "super_admin": "Super Admin"

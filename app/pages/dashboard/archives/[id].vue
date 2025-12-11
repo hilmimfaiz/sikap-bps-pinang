@@ -29,17 +29,20 @@ const showCreateFolderModal = ref(false)
 const showUploadModal = ref(false)
 const showRenameModal = ref(false) // Rename Folder Utama
 const showRenameSubFolderModal = ref(false) // Rename Sub-folder
+const showRenameFileModal = ref(false) // Rename File
 const showDeleteFolderConfirm = ref(false)
 const showDeleteSubFolderConfirm = ref(false)
 const showDeleteFileConfirm = ref(false)
 const showShareFileModal = ref(false)
 const showShareFolderModal = ref(false)
 const showBulkDeleteConfirm = ref(false)
+const showDuplicateConfirm = ref(false) // Duplicate Warning
 
 // Forms & Data Holders
 const createFolderName = ref('')
 const newFolderName = ref('')
 const newSubFolderName = ref('')
+const newFileName = ref('') // Holder nama file baru
 const selectedFile = ref<any>(null)
 const selectedSubFolder = ref<any>(null)
 const shareFileUserIds = ref<number[]>([]) 
@@ -289,19 +292,71 @@ const onFileChange = (e: any) => {
   }
 }
 
-const handleUpload = async () => {
+// --- [UPDATED] HANDLE UPLOAD LOGIC ---
+const handleUpload = async (force: boolean = false) => {
   if (!uploadForm.value.file) return toast.warning(t('archives.messages.upload_error'))
+
+  // 1. Cek Duplikasi (Jika tidak dipaksa/force)
+  if (!force) {
+    const inputTitle = uploadForm.value.title || uploadForm.value.file.name
+    const isDuplicate = archives.value.some((f: any) => {
+      // Cek apakah judul SAMA persis DAN Ukuran SAMA persis
+      return f.title === inputTitle && f.fileSize === uploadForm.value.file?.size
+    })
+
+    if (isDuplicate) {
+      showDuplicateConfirm.value = true
+      return // Berhenti di sini, tampilkan modal
+    }
+  }
+
+  // 2. Proses Upload (Jika force true atau tidak ada duplikat)
   startLoading(t('archives.messages.upload_process'))
   const formData = new FormData()
   formData.append('file', uploadForm.value.file)
   formData.append('title', uploadForm.value.title || uploadForm.value.file.name)
   formData.append('folderId', folderId)
   formData.append('uploaderId', userCookie.value?.id)
+  
   try {
     await $fetch('/api/archives/upload', { method: 'POST', body: formData })
     await refresh() 
     closeModals(); await stopLoading(); toast.success(t('archives.messages.upload_success'))
-  } catch (e) { await stopLoading(); toast.error(t('archives.messages.upload_error')) }
+  } catch (e) { 
+    await stopLoading(); toast.error(t('archives.messages.upload_error')) 
+  }
+}
+
+// Fungsi bantu untuk lanjut upload (dipanggil dari Modal Konfirmasi)
+const proceedUpload = () => {
+  showDuplicateConfirm.value = false
+  handleUpload(true) // Force = true
+}
+
+// --- ACTIONS RENAME FILE ---
+const openRenameFile = (file: any) => {
+  selectedFile.value = file
+  newFileName.value = file.title
+  showRenameFileModal.value = true
+}
+
+const handleRenameFile = async () => {
+  if (!selectedFile.value || !newFileName.value.trim()) return
+  startLoading(t('archives.messages.rename_file_process'))
+  try {
+    // Memanggil API PUT untuk rename file
+    await $fetch(`/api/archives/${selectedFile.value.id}`, { 
+      method: 'PUT', 
+      body: { title: newFileName.value } 
+    })
+    await refresh() // Refresh data list
+    closeModals()
+    await stopLoading()
+    toast.success(t('archives.messages.rename_file_success'))
+  } catch (e) {
+    await stopLoading()
+    toast.error(t('archives.messages.rename_file_error'))
+  }
 }
 
 const confirmDeleteFile = (file: any) => { selectedFile.value = file; showDeleteFileConfirm.value = true }
@@ -348,14 +403,22 @@ const handleBulkDelete = async () => {
 const closeModals = () => {
   showAddDropdown.value = false; showCreateFolderModal.value = false; showUploadModal.value = false
   showRenameModal.value = false; showRenameSubFolderModal.value = false
+  showRenameFileModal.value = false; 
   showDeleteFolderConfirm.value = false; showDeleteSubFolderConfirm.value = false
   showDeleteFileConfirm.value = false; showShareFileModal.value = false; showShareFolderModal.value = false
   showBulkDeleteConfirm.value = false
+  showDuplicateConfirm.value = false
   
   createFolderName.value = ''; newFolderName.value = ''; newSubFolderName.value = ''
+  newFileName.value = '' // Reset nama file
   selectedFile.value = null; selectedSubFolder.value = null
   shareFileUserIds.value = []; shareFolderUserIds.value = []
-  uploadForm.value = { file: null, title: '' }
+  
+  // Jangan reset uploadForm jika hanya menutup modal duplikasi (biar user bisa rename), 
+  // tapi reset jika menutup modal upload utama.
+  if (!showDuplicateConfirm.value && !showUploadModal.value) {
+      uploadForm.value = { file: null, title: '' }
+  }
 }
 const getDownloadUrl = (path: string) => path
 </script>
@@ -581,6 +644,10 @@ const getDownloadUrl = (path: string) => path
                     </a>
                     
                     <template v-if="canManage">
+                      <button @click="openRenameFile(file)" class="p-2 bg-amber-50 hover:bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40 rounded-lg transition-all hover:scale-110 shadow-sm border border-amber-100 dark:border-amber-800/30" :title="$t('common.edit')">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                      </button>
+
                       <button @click="openShareFileModal(file)" class="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40 rounded-lg transition-all hover:scale-110 shadow-sm border border-blue-100 dark:border-blue-800/30" :title="$t('common.share')">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.102 1.101" /></svg>
                       </button>
@@ -641,6 +708,20 @@ const getDownloadUrl = (path: string) => path
     </Transition>
 
     <Transition enter-active-class="transition duration-400 cubic-bezier(0.16, 1, 0.3, 1)" enter-from-class="opacity-0 scale-95 translate-y-8" enter-to-class="opacity-100 scale-100 translate-y-0" leave-active-class="transition duration-300 ease-in" leave-from-class="opacity-100 scale-100 translate-y-0" leave-to-class="opacity-0 scale-95 translate-y-8">
+      <div v-if="showRenameFileModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div class="bg-white dark:bg-gray-900 rounded-[1.5rem] shadow-2xl border border-gray-100 dark:border-gray-800 w-full max-w-sm sm:max-w-md p-6 relative pointer-events-auto overflow-hidden">
+          <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+          <h3 class="text-lg font-bold mb-5 text-gray-900 dark:text-white">{{ $t('archives.modal.rename_file_title') }}</h3>
+          <input v-model="newFileName" type="text" class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/40 transition-all text-sm" autoFocus @keyup.enter="handleRenameFile"/>
+          <div class="flex gap-3 mt-6">
+            <button @click="closeModals" class="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition text-xs font-medium">{{ $t('common.cancel') }}</button>
+            <button @click="handleRenameFile" class="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-lg shadow-md transition text-xs font-medium">{{ $t('common.save') }}</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition enter-active-class="transition duration-400 cubic-bezier(0.16, 1, 0.3, 1)" enter-from-class="opacity-0 scale-95 translate-y-8" enter-to-class="opacity-100 scale-100 translate-y-0" leave-active-class="transition duration-300 ease-in" leave-from-class="opacity-100 scale-100 translate-y-0" leave-to-class="opacity-0 scale-95 translate-y-8">
       <div v-if="showDeleteSubFolderConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div class="bg-white dark:bg-gray-900 rounded-[1.5rem] shadow-2xl border border-gray-100 dark:border-gray-800 max-w-xs sm:max-w-sm w-full p-6 text-center relative pointer-events-auto overflow-hidden">
           <div class="absolute top-0 left-0 w-full h-1.5 bg-red-500"></div>
@@ -663,7 +744,7 @@ const getDownloadUrl = (path: string) => path
             <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ $t('archives.modal.upload_title') }}</h3>
             <button @click="showUploadModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
           </div>
-          <form @submit.prevent="handleUpload" class="space-y-4">
+          <form @submit.prevent="handleUpload(false)" class="space-y-4">
             <div>
               <label class="block text-xs font-semibold mb-1.5 text-gray-600 dark:text-gray-300 uppercase">{{ $t('archives.modal.file_label') }}</label>
               <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 text-center hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition relative cursor-pointer">
@@ -685,6 +766,21 @@ const getDownloadUrl = (path: string) => path
               <button type="submit" class="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg shadow-md transition text-xs font-medium">{{ $t('common.upload') }}</button>
             </div>
           </form>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition enter-active-class="transition duration-400 cubic-bezier(0.16, 1, 0.3, 1)" enter-from-class="opacity-0 scale-95 translate-y-8" enter-to-class="opacity-100 scale-100 translate-y-0" leave-active-class="transition duration-300 ease-in" leave-from-class="opacity-100 scale-100 translate-y-0" leave-to-class="opacity-0 scale-95 translate-y-8">
+      <div v-if="showDuplicateConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div class="bg-white dark:bg-gray-900 rounded-[1.5rem] shadow-2xl border border-gray-100 dark:border-gray-800 max-w-xs sm:max-w-sm w-full p-6 text-center relative pointer-events-auto overflow-hidden">
+          <div class="absolute top-0 left-0 w-full h-1.5 bg-yellow-500"></div>
+          <div class="w-14 h-14 mx-auto mb-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-full flex items-center justify-center text-2xl text-yellow-600">⚠️</div>
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">{{ $t('archives.modal.duplicate_title') }}</h3>
+          <p class="text-xs text-gray-500 mb-6">{{ $t('archives.modal.duplicate_desc') }}</p>
+          <div class="flex gap-3">
+            <button @click="closeModals" class="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition text-xs font-medium">{{ $t('common.cancel') }}</button>
+            <button @click="proceedUpload" class="flex-1 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg shadow-md transition text-xs font-medium">{{ $t('common.keep_save') }}</button>
+          </div>
         </div>
       </div>
     </Transition>
@@ -825,7 +921,7 @@ const getDownloadUrl = (path: string) => path
     </Transition>
 
     <Transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
-      <div v-if="showUploadModal || showRenameModal || showRenameSubFolderModal || showDeleteFolderConfirm || showDeleteSubFolderConfirm || showDeleteFileConfirm || showShareFileModal || showShareFolderModal || showBulkDeleteConfirm || showCreateFolderModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" @click="closeModals"></div>
+      <div v-if="showUploadModal || showRenameModal || showRenameSubFolderModal || showRenameFileModal || showDeleteFolderConfirm || showDeleteSubFolderConfirm || showDeleteFileConfirm || showShareFileModal || showShareFolderModal || showBulkDeleteConfirm || showCreateFolderModal || showDuplicateConfirm" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" @click="closeModals"></div>
     </Transition>
 
   </div>
