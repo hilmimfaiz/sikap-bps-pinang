@@ -431,7 +431,7 @@
   },
   "dashboard": {
     "welcome": "Hello",
-    "subtitle": "Here is your system summary.",
+    "subtitle": "Welcome to the SIKAP Home Page.",
     "stats": {
       "users": "Total Users",
       "categories": "Total Categories",
