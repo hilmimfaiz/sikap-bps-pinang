@@ -8,12 +8,17 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
 
   runtimeConfig: {
-
+    // Private keys (Hanya di server)
     resendApiKey: process.env.RESEND_API_KEY,
     resendFrom: process.env.RESEND_FROM,
+    cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET, // Wajib ada untuk generate signature
 
+    // Public keys (Bisa diakses di client/browser)
     public: {
-      apiBase: '/api'
+      apiBase: '/api',
+      // Tambahkan dua konfigurasi ini agar frontend bisa upload langsung
+      cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      cloudinaryApiKey: process.env.CLOUDINARY_API_KEY
     }
   },
 

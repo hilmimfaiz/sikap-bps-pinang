@@ -8,6 +8,34 @@ cloudinary.config({
   secure: true
 })
 
+/**
+ * BARU: Fungsi untuk membuat signature.
+ * Ini dipanggil oleh API 'signature.get.ts' agar frontend bisa upload langsung 
+ * ke Cloudinary tanpa mengekspos API Secret.
+ */
+export const generateCloudinarySignature = (params: Record<string, any>) => {
+  const timestamp = Math.round((new Date).getTime() / 1000);
+  
+  const paramsToSign = {
+    ...params,
+    timestamp
+  };
+
+  // Membuat signature SHA-1 menggunakan API Secret
+  const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET as string);
+  
+  return {
+    timestamp,
+    signature,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME
+  }
+}
+
+/**
+ * LAMA: Tetap disimpan jika ada fitur lain yang upload file kecil lewat server.
+ * (Tidak digunakan untuk upload file besar 100MB+)
+ */
 export const saveFile = async (file: any) => {
   return new Promise((resolve, reject) => {
     // Upload stream ke Cloudinary
@@ -35,13 +63,15 @@ export const saveFile = async (file: any) => {
   })
 }
 
+/**
+ * LAMA: Fungsi untuk menghapus file dari Cloudinary saat data dihapus.
+ */
 export const deleteFileFromStorage = async (fileUrl: string) => {
   try {
     if (!fileUrl.includes('cloudinary')) return
 
     // Ekstrak public_id dari URL
-    // URL: https://res.cloudinary.com/.../upload/v123/sikap_app_archives/namafile.jpg
-    // Public ID: sikap_app_archives/namafile
+    // Contoh URL: https://res.cloudinary.com/.../upload/v123/sikap_app_archives/namafile.jpg
     const splitUrl = fileUrl.split('/')
     const filenameWithExt = splitUrl[splitUrl.length - 1]
     const folderName = splitUrl[splitUrl.length - 2]
@@ -49,10 +79,10 @@ export const deleteFileFromStorage = async (fileUrl: string) => {
     // Hapus ekstensi (.jpg, .pdf) untuk mendapatkan public_id murni
     const publicId = `${folderName}/${filenameWithExt.substring(0, filenameWithExt.lastIndexOf('.'))}`
 
-    // Hapus (Coba sebagai image dan raw/pdf)
+    // Hapus (Coba sebagai image, raw, dan video untuk memastikan terhapus)
     await cloudinary.uploader.destroy(publicId, { resource_type: 'image' })
     await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' })
-    await cloudinary.uploader.destroy(publicId, { resource_type: 'video' }) // Jaga-jaga jika terdeteksi video
+    await cloudinary.uploader.destroy(publicId, { resource_type: 'video' }) 
     
   } catch (error) {
     console.error('Gagal hapus file di Cloudinary:', error)

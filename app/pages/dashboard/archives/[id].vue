@@ -5,6 +5,7 @@ const route = useRoute()
 const router = useRouter()
 const folderId = route.params.id as string
 const userCookie = useCookie<any>('user_data')
+const config = useRuntimeConfig() // Akses konfigurasi publik (Cloud Name, API Key)
 
 definePageMeta({
   layout: 'dashboard',
@@ -294,10 +295,8 @@ const openUploadModalTrigger = () => {
 const onFileChange = (e: any) => {
   const file = e.target.files[0]
   if (file) {
-    if (file.size > 100 * 1024 * 1024) { 
-      e.target.value = null; 
-      return toast.warning(t('users.modal.file_limit_info')) 
-    }
+    // Validasi di frontend opsional, tapi tetap bagus untuk UX
+    // Di sini kita izinkan file besar karena akan direct upload
     uploadForm.value.file = file
     uploadForm.value.title = file.name.substring(0, file.name.lastIndexOf('.')) || file.name 
   } else { 
@@ -306,7 +305,7 @@ const onFileChange = (e: any) => {
   }
 }
 
-// --- [UPDATED] HANDLE UPLOAD LOGIC WITH PROGRESS ---
+// --- [UPDATED] HANDLE UPLOAD LOGIC WITH PROGRESS (DIRECT TO CLOUDINARY) ---
 const handleUpload = async (force: boolean = false) => {
   if (!uploadForm.value.file) return toast.warning(t('archives.messages.upload_error'))
 
@@ -327,55 +326,86 @@ const handleUpload = async (force: boolean = false) => {
   // 2. Persiapan Upload
   isUploading.value = true
   uploadProgress.value = 0
-  uploadStats.value = { loaded: 0, total: 0 }
+  uploadStats.value = { loaded: 0, total: uploadForm.value.file.size }
 
-  const formData = new FormData()
-  formData.append('file', uploadForm.value.file)
-  formData.append('title', uploadForm.value.title || uploadForm.value.file.name)
-  formData.append('folderId', folderId)
-  if (userCookie.value?.id) {
-    formData.append('uploaderId', userCookie.value.id.toString())
-  }
-  
-  // 3. Gunakan XHR untuk tracking progress
-  const xhr = new XMLHttpRequest()
-  xhr.open('POST', '/api/archives/upload')
+  try {
+    // LANGKAH 1: Minta Signature dari Server kita
+    // API ini mengembalikan timestamp, signature, dan apiKey yang valid
+    const { timestamp, signature, apiKey, cloudName } = await $fetch('/api/archives/signature')
 
-  // Event Progress
-  xhr.upload.onprogress = (e) => {
-    if (e.lengthComputable) {
-      uploadProgress.value = (e.loaded / e.total) * 100
-      uploadStats.value = { loaded: e.loaded, total: e.total }
+    // LANGKAH 2: Upload Langsung ke Cloudinary (Bypass Vercel Server)
+    const formData = new FormData()
+    formData.append('file', uploadForm.value.file)
+    formData.append('api_key', apiKey)
+    formData.append('timestamp', timestamp.toString())
+    formData.append('signature', signature)
+    formData.append('folder', 'sikap_app_archives') // Wajib sama dengan di server signature
+
+    // Gunakan XHR agar bisa tracking progress bar dengan akurat
+    const xhr = new XMLHttpRequest()
+    // URL Upload Cloudinary: https://api.cloudinary.com/v1_1/<cloud_name>/auto/upload
+    const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`
+    
+    xhr.open('POST', cloudinaryUrl)
+
+    // Event Progress Upload ke Cloudinary
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        uploadProgress.value = (e.loaded / e.total) * 100
+        uploadStats.value = { loaded: e.loaded, total: e.total }
+      }
     }
-  }
 
-  // Event Load (Selesai)
-  xhr.onload = async () => {
-    isUploading.value = false
-    if (xhr.status >= 200 && xhr.status < 300) {
-      // Sukses
-      await refresh()
-      closeModals()
-      toast.success(t('archives.messages.upload_success'))
-    } else {
-      // Error dari server
-      let msg = t('archives.messages.upload_error')
-      try {
-        const res = JSON.parse(xhr.responseText)
-        if (res.message) msg = res.message
-      } catch (e) {}
-      toast.error(msg)
+    // Event Selesai Upload ke Cloudinary
+    xhr.onload = async () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        // Respons sukses dari Cloudinary (berisi URL file, size, dll)
+        const response = JSON.parse(xhr.responseText)
+        
+        // LANGKAH 3: Kirim Metadata (URL) ke Server Database Kita
+        try {
+          await $fetch('/api/archives/upload', {
+            method: 'POST',
+            body: {
+              title: uploadForm.value.title || uploadForm.value.file?.name,
+              folderId: folderId,
+              fileUrl: response.secure_url,
+              fileName: response.original_filename,
+              fileSize: response.bytes,
+              fileType: response.format || uploadForm.value.file?.type
+            }
+          })
+
+          // Sukses Total
+          await refresh()
+          closeModals()
+          toast.success(t('archives.messages.upload_success'))
+        } catch (dbError: any) {
+          console.error("DB Save Error", dbError)
+          toast.error("File terupload, namun gagal menyimpan data ke sistem.")
+        }
+      } else {
+        // Error dari Cloudinary
+        console.error('Cloudinary Error', xhr.responseText)
+        toast.error('Gagal upload ke penyimpanan Cloud.')
+      }
+      isUploading.value = false
     }
-  }
 
-  // Event Error (Jaringan dll)
-  xhr.onerror = () => {
+    // Event Error Network
+    xhr.onerror = () => {
+      isUploading.value = false
+      toast.error(t('archives.messages.upload_error') || 'Terjadi kesalahan jaringan.')
+    }
+
+    // Eksekusi Request
+    xhr.send(formData)
+
+  } catch (e: any) {
     isUploading.value = false
-    toast.error(t('archives.messages.upload_error'))
+    console.error(e)
+    toast.error(e.message || t('archives.messages.upload_error'))
   }
-
-  // Kirim
-  xhr.send(formData)
 }
 
 // Fungsi bantu untuk lanjut upload (dipanggil dari Modal Konfirmasi)

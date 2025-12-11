@@ -2,48 +2,53 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-// JANGAN ADA IMPORT saveFile DISINI. Nitro auto-imports it.
-
 export default defineEventHandler(async (event) => {
   try {
+    // 1. Cek Login User
     const userCookie = getCookie(event, 'user_data')
     if (!userCookie) throw createError({ statusCode: 401, message: 'Login diperlukan' })
     const user = JSON.parse(userCookie)
 
-    const files = await readMultipartFormData(event)
-    if (!files || files.length === 0) throw createError({ statusCode: 400, message: "Tidak ada file" })
+    // 2. Baca Body sebagai JSON (Bukan Multipart/FormData lagi)
+    const body = await readBody(event)
+    
+    // Ambil data yang dikirim dari Client setelah sukses upload ke Cloudinary
+    const { 
+      title, 
+      folderId, 
+      fileUrl,    // URL file yang sudah ada di Cloudinary
+      fileName,   
+      fileSize,   // Ukuran dalam bytes
+      fileType 
+    } = body
 
-    const uploadedFile = files.find(f => f.name === 'file')
-    const folderIdStr = files.find(f => f.name === 'folderId')?.data.toString()
-    const title = files.find(f => f.name === 'title')?.data.toString()
-
-    if (!uploadedFile || !folderIdStr) throw createError({ statusCode: 400, message: "File & Folder ID wajib" })
-
-    // Validasi Ukuran 100MB
-    const MAX_SIZE = 100 * 1024 * 1024;
-    if (uploadedFile.data.length > MAX_SIZE) {
-      throw createError({ statusCode: 413, message: "Ukuran file max 100MB" })
+    // 3. Validasi Data
+    if (!fileUrl || !folderId) {
+      throw createError({ statusCode: 400, message: "Data file tidak lengkap (URL/Folder ID hilang)" })
     }
 
-    const folderId = parseInt(folderIdStr)
-    const targetFolder = await prisma.folder.findUnique({ where: { id: folderId } })
+    // 4. Cek Validitas Folder & Hak Akses
+    const folderIdInt = parseInt(folderId)
+    const targetFolder = await prisma.folder.findUnique({ where: { id: folderIdInt } })
 
-    if (!targetFolder) throw createError({ statusCode: 404, message: "Folder tidak ditemukan" })
+    if (!targetFolder) {
+      throw createError({ statusCode: 404, message: "Folder tujuan tidak ditemukan" })
+    }
 
+    // Hanya Admin atau Pemilik Folder yang boleh simpan
     if (user.role !== 'admin' && targetFolder.userId !== user.id) {
-      throw createError({ statusCode: 403, message: "Akses Ditolak" })
+      throw createError({ statusCode: 403, message: "Anda tidak memiliki akses ke folder ini" })
     }
 
-    // Panggil saveFile langsung (Auto-imported)
-    const fileInfo: any = await saveFile(uploadedFile)
-
+    // 5. Simpan Metadata ke Database
+    // (File fisik sudah aman di Cloudinary, kita hanya catat link-nya)
     const archive = await prisma.archive.create({
       data: {
-        title: title || fileInfo.fileName,
-        filePath: fileInfo.filePath,
-        fileSize: fileInfo.fileSize,
-        fileType: fileInfo.fileType,
-        folderId: folderId,
+        title: title || fileName,     // Gunakan nama file jika judul kosong
+        filePath: fileUrl,            // Link Cloudinary
+        fileSize: parseInt(fileSize), // Pastikan jadi integer
+        fileType: fileType || 'unknown',
+        folderId: folderIdInt,
         uploaderId: user.id
       }
     })
@@ -51,7 +56,7 @@ export default defineEventHandler(async (event) => {
     return archive
 
   } catch (e: any) {
-    console.error("UPLOAD ERROR:", e)
+    console.error("DB SAVE ERROR:", e)
     throw createError({ statusCode: e.statusCode || 500, message: e.message })
   }
 })
