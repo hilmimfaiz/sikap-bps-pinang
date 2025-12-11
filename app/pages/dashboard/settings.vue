@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
 definePageMeta({
   layout: 'dashboard',
@@ -31,6 +31,31 @@ onMounted(() => {
   }, 100)
 })
 
+// --- NEW: LOGIKA KEKUATAN PASSWORD ---
+const passwordStrength = computed(() => {
+  const pass = form.value.newPassword
+  
+  if (!pass) return { score: 0, label: '', color: 'bg-gray-200 dark:bg-gray-700', width: '0%' }
+
+  // Regex Check
+  const hasUpperStart = /^[A-Z]/.test(pass) // Huruf besar di awal
+  const hasNumber = /[0-9]/.test(pass)      // Memakai angka
+  const hasSymbol = /[!@#$%^&*.,?_~\-(){}[\]]/.test(pass) // Memakai simbol (termasuk titik)
+
+  // Level 3: Kuat (Kapital Awal + Angka + Simbol)
+  if (hasUpperStart && hasNumber && hasSymbol) {
+    return { score: 3, label: 'Kuat', color: 'bg-green-500', width: '100%' }
+  }
+  
+  // Level 2: Sedang (Kapital Awal + Angka)
+  if (hasUpperStart && hasNumber) {
+    return { score: 2, label: 'Sedang', color: 'bg-yellow-500', width: '66%' }
+  }
+
+  // Level 1: Lemah (Tidak memenuhi syarat di atas)
+  return { score: 1, label: 'Lemah', color: 'bg-red-500', width: '33%' }
+})
+
 // --- ACTION ---
 const handleChangePassword = async () => {
   // Validasi Sederhana
@@ -39,6 +64,11 @@ const handleChangePassword = async () => {
   }
   if (form.value.newPassword.length < 6) {
     return toast.warning(t('settings.messages.min_length'))
+  }
+
+  // NEW: Validasi Kekuatan Password
+  if (passwordStrength.value.score < 2) {
+    return toast.warning('Password terlalu lemah. Wajib: Huruf besar diawal & angka.')
   }
 
   startLoading(t('settings.messages.process'))
@@ -135,6 +165,38 @@ const handleChangePassword = async () => {
                   <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a10.05 10.05 0 011.574-2.59M6 6l12 12" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18" /></svg>
                 </button>
               </div>
+
+              <div v-if="form.newPassword" class="mt-3">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-[10px] uppercase font-bold text-gray-500">Kekuatan:</span>
+                  <span class="text-[10px] font-bold" 
+                    :class="{
+                      'text-red-500': passwordStrength.score === 1,
+                      'text-yellow-600 dark:text-yellow-500': passwordStrength.score === 2,
+                      'text-green-600 dark:text-green-400': passwordStrength.score === 3
+                    }">
+                    {{ passwordStrength.label }}
+                  </span>
+                </div>
+                <div class="h-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div class="h-full transition-all duration-500 ease-out" 
+                       :class="passwordStrength.color" 
+                       :style="{ width: passwordStrength.width }"></div>
+                </div>
+                
+                <div class="mt-2 text-[10px] text-gray-500 dark:text-gray-400 space-y-0.5">
+                  <p :class="{'text-green-600 dark:text-green-400': /^[A-Z]/.test(form.newPassword)}">
+                    • Wajib: Huruf besar di awal
+                  </p>
+                  <p :class="{'text-green-600 dark:text-green-400': /[0-9]/.test(form.newPassword)}">
+                    • Wajib: Mengandung angka
+                  </p>
+                  <p :class="{'text-green-600 dark:text-green-400': /[!@#$%^&*.,?_~\-(){}[\]]/.test(form.newPassword)}">
+                    • Opsional: Simbol (untuk Kuat)
+                  </p>
+                </div>
+              </div>
+
             </div>
 
             <div>
@@ -163,13 +225,17 @@ const handleChangePassword = async () => {
           <div class="flex justify-end pt-4">
             <button 
               type="submit" 
-              class="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold px-6 py-2.5 rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 flex items-center gap-2 text-sm"
+              :disabled="passwordStrength.score < 2"
+              class="group relative overflow-hidden text-white font-semibold px-6 py-2.5 rounded-xl shadow-lg transition-all duration-300 transform flex items-center gap-2 text-sm"
+              :class="passwordStrength.score < 2 
+                ? 'bg-gray-400 cursor-not-allowed opacity-70' 
+                : 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 shadow-blue-500/30 hover:shadow-xl hover:-translate-y-0.5'"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
               </svg>
               {{ $t('settings.btn_save') }}
-              <div class="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+              <div v-if="passwordStrength.score >= 2" class="absolute inset-0 bg-white/20 -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
             </button>
           </div>
 
