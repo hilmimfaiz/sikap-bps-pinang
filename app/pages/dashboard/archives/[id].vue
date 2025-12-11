@@ -5,7 +5,7 @@ const route = useRoute()
 const router = useRouter()
 const folderId = route.params.id as string
 const userCookie = useCookie<any>('user_data')
-const config = useRuntimeConfig() // Akses konfigurasi publik (Cloud Name, API Key)
+const config = useRuntimeConfig()
 
 definePageMeta({
   layout: 'dashboard',
@@ -43,6 +43,8 @@ const showDuplicateConfirm = ref(false) // Duplicate Warning
 const isUploading = ref(false)
 const uploadProgress = ref(0)
 const uploadStats = ref({ loaded: 0, total: 0 })
+// Simpan referensi XHR agar bisa dibatalkan
+const xhrRef = ref<XMLHttpRequest | null>(null)
 
 // Forms & Data Holders
 const createFolderName = ref('')
@@ -295,8 +297,6 @@ const openUploadModalTrigger = () => {
 const onFileChange = (e: any) => {
   const file = e.target.files[0]
   if (file) {
-    // Validasi di frontend opsional, tapi tetap bagus untuk UX
-    // Di sini kita izinkan file besar karena akan direct upload
     uploadForm.value.file = file
     uploadForm.value.title = file.name.substring(0, file.name.lastIndexOf('.')) || file.name 
   } else { 
@@ -305,7 +305,7 @@ const onFileChange = (e: any) => {
   }
 }
 
-// --- [UPDATED] HANDLE UPLOAD LOGIC WITH PROGRESS (DIRECT TO CLOUDINARY) ---
+// --- HANDLE UPLOAD LOGIC WITH PROGRESS & CANCEL ---
 const handleUpload = async (force: boolean = false) => {
   if (!uploadForm.value.file) return toast.warning(t('archives.messages.upload_error'))
 
@@ -313,13 +313,12 @@ const handleUpload = async (force: boolean = false) => {
   if (!force) {
     const inputTitle = uploadForm.value.title || uploadForm.value.file.name
     const isDuplicate = archives.value.some((f: any) => {
-      // Cek apakah judul SAMA persis DAN Ukuran SAMA persis
       return f.title === inputTitle && f.fileSize === uploadForm.value.file?.size
     })
 
     if (isDuplicate) {
       showDuplicateConfirm.value = true
-      return // Berhenti di sini, tampilkan modal
+      return 
     }
   }
 
@@ -329,26 +328,24 @@ const handleUpload = async (force: boolean = false) => {
   uploadStats.value = { loaded: 0, total: uploadForm.value.file.size }
 
   try {
-    // LANGKAH 1: Minta Signature dari Server kita
-    // API ini mengembalikan timestamp, signature, dan apiKey yang valid
+    // LANGKAH 1: Minta Signature
     const { timestamp, signature, apiKey, cloudName } = await $fetch('/api/archives/signature')
 
-    // LANGKAH 2: Upload Langsung ke Cloudinary (Bypass Vercel Server)
+    // LANGKAH 2: Upload Langsung ke Cloudinary
     const formData = new FormData()
     formData.append('file', uploadForm.value.file)
     formData.append('api_key', apiKey)
     formData.append('timestamp', timestamp.toString())
     formData.append('signature', signature)
-    formData.append('folder', 'sikap_app_archives') // Wajib sama dengan di server signature
+    formData.append('folder', 'sikap_app_archives')
 
-    // Gunakan XHR agar bisa tracking progress bar dengan akurat
     const xhr = new XMLHttpRequest()
-    // URL Upload Cloudinary: https://api.cloudinary.com/v1_1/<cloud_name>/auto/upload
-    const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`
+    // Simpan ke ref agar bisa dibatalkan
+    xhrRef.value = xhr
     
+    const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`
     xhr.open('POST', cloudinaryUrl)
 
-    // Event Progress Upload ke Cloudinary
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         uploadProgress.value = (e.loaded / e.total) * 100
@@ -356,13 +353,14 @@ const handleUpload = async (force: boolean = false) => {
       }
     }
 
-    // Event Selesai Upload ke Cloudinary
     xhr.onload = async () => {
+      // Clear ref saat selesai
+      xhrRef.value = null
+      
       if (xhr.status >= 200 && xhr.status < 300) {
-        // Respons sukses dari Cloudinary (berisi URL file, size, dll)
         const response = JSON.parse(xhr.responseText)
         
-        // LANGKAH 3: Kirim Metadata (URL) ke Server Database Kita
+        // LANGKAH 3: Simpan ke DB
         try {
           await $fetch('/api/archives/upload', {
             method: 'POST',
@@ -376,35 +374,51 @@ const handleUpload = async (force: boolean = false) => {
             }
           })
 
-          // Sukses Total
           await refresh()
           closeModals()
           toast.success(t('archives.messages.upload_success'))
         } catch (dbError: any) {
           console.error("DB Save Error", dbError)
-          toast.error("File terupload, namun gagal menyimpan data ke sistem.")
+          toast.error("File terupload, namun gagal menyimpan data.")
         }
       } else {
-        // Error dari Cloudinary
         console.error('Cloudinary Error', xhr.responseText)
         toast.error('Gagal upload ke penyimpanan Cloud.')
       }
       isUploading.value = false
     }
 
-    // Event Error Network
     xhr.onerror = () => {
+      xhrRef.value = null
       isUploading.value = false
-      toast.error(t('archives.messages.upload_error') || 'Terjadi kesalahan jaringan.')
+      toast.error(t('archives.messages.upload_error') || 'Kesalahan jaringan.')
     }
 
-    // Eksekusi Request
+    // Jika dibatalkan user sebelum sempat send (sangat jarang), handle error
+    xhr.onabort = () => {
+      xhrRef.value = null
+      isUploading.value = false
+      toast.info('Upload dibatalkan')
+    }
+
     xhr.send(formData)
 
   } catch (e: any) {
     isUploading.value = false
+    xhrRef.value = null
     console.error(e)
     toast.error(e.message || t('archives.messages.upload_error'))
+  }
+}
+
+// Fungsi Membatalkan Upload
+const cancelUpload = () => {
+  if (xhrRef.value) {
+    xhrRef.value.abort() // Ini akan memicu event onabort di atas
+  } else {
+    // Fallback jika ref tidak ada tapi state nyangkut
+    isUploading.value = false
+    uploadProgress.value = 0
   }
 }
 
@@ -425,12 +439,11 @@ const handleRenameFile = async () => {
   if (!selectedFile.value || !newFileName.value.trim()) return
   startLoading(t('archives.messages.rename_file_process'))
   try {
-    // Memanggil API PUT untuk rename file
     await $fetch(`/api/archives/${selectedFile.value.id}`, { 
       method: 'PUT', 
       body: { title: newFileName.value } 
     })
-    await refresh() // Refresh data list
+    await refresh()
     closeModals()
     await stopLoading()
     toast.success(t('archives.messages.rename_file_success'))
@@ -482,6 +495,14 @@ const handleBulkDelete = async () => {
 
 // --- HELPER ---
 const closeModals = () => {
+  // Jika sedang upload, jangan tutup modal upload sembarangan kecuali dibatalkan lewat tombol
+  // Tapi jika user klik background (ini dipanggil), kita cek:
+  if (isUploading.value && showUploadModal.value) {
+      // Opsional: Bisa blokir penutupan, atau otomatis batalkan.
+      // Di sini kita biarkan terbuka (return) agar tidak ter-cancel tidak sengaja
+      return 
+  }
+
   showAddDropdown.value = false; showCreateFolderModal.value = false; showUploadModal.value = false
   showRenameModal.value = false; showRenameSubFolderModal.value = false
   showRenameFileModal.value = false; 
@@ -500,8 +521,6 @@ const closeModals = () => {
   isUploading.value = false
   uploadProgress.value = 0
   
-  // Jangan reset uploadForm jika hanya menutup modal duplikasi (biar user bisa rename), 
-  // tapi reset jika menutup modal upload utama.
   if (!showDuplicateConfirm.value && !showUploadModal.value) {
       uploadForm.value = { file: null, title: '' }
   }
@@ -828,7 +847,7 @@ const getDownloadUrl = (path: string) => path
           <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
           <div class="flex justify-between items-center mb-5">
             <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ $t('archives.modal.upload_title') }}</h3>
-            <button @click="showUploadModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+            <button v-if="!isUploading" @click="showUploadModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
           </div>
           
           <form v-if="!isUploading" @submit.prevent="handleUpload(false)" class="space-y-4">
@@ -854,7 +873,7 @@ const getDownloadUrl = (path: string) => path
             </div>
           </form>
 
-          <div v-else class="py-8 text-center space-y-4">
+          <div v-else class="py-6 text-center space-y-4">
             <div class="relative w-20 h-20 mx-auto">
               <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                 <path class="text-gray-200 dark:text-gray-700" stroke-width="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
@@ -870,6 +889,12 @@ const getDownloadUrl = (path: string) => path
                 {{ formatSize(uploadStats.loaded) }} / {{ formatSize(uploadStats.total) }}
               </p>
             </div>
+            <button 
+              @click="cancelUpload"
+              class="mt-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg transition-colors"
+            >
+              Batalkan
+            </button>
           </div>
 
         </div>
